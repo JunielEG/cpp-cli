@@ -203,7 +203,7 @@ function New-Module {
     Write-Host "Módulo $name creado." -ForegroundColor Green
 }
 
-function New-Project { #//TODO que abra vs code
+function New-Project {
     Request-Name
 
     New-Item -ItemType Directory -Path $name | Out-Null
