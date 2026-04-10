@@ -11,6 +11,33 @@ param(
 $TEMPLATES = Join-Path $PSScriptRoot "templates"
 
 # -------------------------
+# HELP DATA 
+# -------------------------
+$COMMANDS = @(
+    @{ Group = "Scaffold"; Cmd = "cppx new project <name>"; Desc = "Crea proyecto con src/, include/, build/ y CMakeLists.txt" },
+    @{ Group = "Scaffold"; Cmd = "cppx new class <name>";   Desc = "Agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    @{ Group = "Scaffold"; Cmd = "cppx new module <name>";  Desc = "Agrega módulo con su propio subdirectorio" },
+    @{ Group = "Build";    Cmd = "cppx build";              Desc = "Configura y compila con CMake" },
+    @{ Group = "Build";    Cmd = "cppx run";                Desc = "Compila y ejecuta el binario resultante" },
+    @{ Group = "Build";    Cmd = "cppx dist";               Desc = "Build Release + empaca .exe y DLLs en dist/<proyecto>/" }
+)
+
+# -------------------------
+# UTILS
+# -------------------------
+function Show-Help {
+    $groups = $COMMANDS | Select-Object -ExpandProperty Group -Unique
+    foreach ($g in $groups) {
+        Write-Host "`n  $g" -ForegroundColor DarkGray
+        $COMMANDS | Where-Object { $_.Group -eq $g } | ForEach-Object {
+            Write-Host ("  {0,-30}" -f $_.Cmd) -ForegroundColor Cyan -NoNewline
+            Write-Host $_.Desc -ForegroundColor Gray
+        }
+    }
+    Write-Host ""
+}
+
+# -------------------------
 # UTILS
 # -------------------------
 function Test-Name {
@@ -253,19 +280,14 @@ Register-ArgumentCompleter -CommandName cpp.ps1 -ScriptBlock {
 switch ($cmd1) {
     "new" {
         switch ($cmd2) {
-            "class" { New-Class }
-            "module" { New-Module }
+            "class"   { New-Class }
+            "module"  { New-Module }
             "project" { New-Project }
+            default   { Show-Help }
         }
     }
-    "build" { Build }
-    "run" { Run }
-    "dist" { Dist }
-    default {
-        #make a cppx help guide
-        Write-Host "cppx new class X"
-        Write-Host "cppx new module engine/render"
-        Write-Host "cppx new project X"
-        Write-Host "cppx build | run | dist"
-    }
+    "build"   { Build }
+    "run"     { Run }
+    "dist"    { Dist }
+    default   { Show-Help }
 }
