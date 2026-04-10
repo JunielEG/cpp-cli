@@ -1,9 +1,6 @@
 # cppx — C++ Project Scaffolding CLI
 
-`cppx` is a Windows command-line tool that generates C++ project boilerplate in one command. Instead of manually creating folders, writing `CMakeLists.txt`, and setting up `main.cpp` every time, `cppx` handles it instantly from any terminal.
-
-> [!IMPORTANT]
-> `cppx` is **Windows only**. Linux and macOS are not supported.
+`cppx` is a command-line tool that generates C++ project boilerplate in one command. Instead of manually creating folders, writing `CMakeLists.txt`, and setting up `main.cpp` every time, `cppx` handles it instantly from any terminal.
 
 ---
 
@@ -12,7 +9,7 @@
 Before installing, make sure you have the following tools available in your system:
 
 - **CMake** — [cmake.org/download](https://cmake.org/download/)
-- **C++ compiler** — either [MSVC (Visual Studio)](https://visualstudio.microsoft.com/) or [MinGW (g++)](https://www.mingw-w64.org/) or [Clang](https://clang.llvm.org/)
+- **C++ compiler** — either [MSVC (Visual Studio)](https://visualstudio.microsoft.com/), [MinGW (g++)](https://www.mingw-w64.org/), or [Clang](https://clang.llvm.org/)
 
 `cppx` will auto-detect which compiler is available at build time.
 
@@ -21,20 +18,34 @@ Before installing, make sure you have the following tools available in your syst
 ## Installation
 
 > [!NOTE]
-> You only need `Install.bat` — cloning the repository is just the easiest way to get it.
+> You only need the install script — cloning the repository is just the easiest way to get it.
 
 **1. Clone the repository:**
 ```bash
 git clone https://github.com/JunielEG/cpp-cli.git
+cd cpp-cli
 ```
 
-**2. Run `Install.bat` as Administrator.**
+**2. Run the install script for your platform:**
 
-This script will:
-- Copy the tool files to `%USERPROFILE%\ScaffoldingTools\cpp-cli\`
-- Register `cppx` in your system PATH so it works from any terminal
+**Windows** — run `Install.bat` as Administrator:
+```bat
+Install.bat
+```
 
-**3. Open a new terminal window** (existing ones won't have the updated PATH yet) and verify:
+**Linux / macOS** — run `install.sh`:
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+Both scripts will:
+- Copy the tool files to `~/ScaffoldingTools/cpp-cli/`
+- Add `cppx` to your PATH
+
+On Unix, the PATH entry is added to the first profile file found: `.zshrc`, `.bashrc`, `.bash_profile`, or `.profile`.
+
+**3. Open a new terminal** (existing ones won't have the updated PATH yet) and verify:
 ```bash
 cppx help
 ```
@@ -137,10 +148,11 @@ cppx run
 
 ## Installed file location
 
-After running `Install.bat`, the tool files live at:
+After running the install script, the tool files live at:
 
-```
-%USERPROFILE%\ScaffoldingTools\cpp-cli\
-```
+| Platform | Path |
+|---|---|
+| Windows | `%USERPROFILE%\ScaffoldingTools\cpp-cli\` |
+| Linux / macOS | `~/ScaffoldingTools/cpp-cli/` |
 
-You don't need to interact with this folder directly.
+You don't need to interact with these folders directly.

@@ -25,8 +25,8 @@ if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 :: Copiar archivos necesarios
 xcopy /E /I /Y "%SOURCE_DIR%templates"  "%INSTALL_DIR%\templates\" > nul
-copy /Y "%SOURCE_DIR%cppx.bat"          "%INSTALL_DIR%\cppx.bat"   > nul
-copy /Y "%SOURCE_DIR%cppx.ps1"          "%INSTALL_DIR%\cppx.ps1"   > nul
+copy /Y "%SOURCE_DIR%windows\cppx.bat"          "%INSTALL_DIR%\cppx.bat"   > nul
+copy /Y "%SOURCE_DIR%windows\cppx.ps1"          "%INSTALL_DIR%\cppx.ps1"   > nul
 
 :: Limpiar carpeta temporal si se clono
 if exist "%TEMP%\%TOOL_NAME%-install" (
