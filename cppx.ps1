@@ -262,9 +262,10 @@ switch ($cmd1) {
     "run" { Run }
     "dist" { Dist }
     default {
-        Write-Host "cpp new class X"
-        Write-Host "cpp new module engine/render"
-        Write-Host "cpp new project X"
-        Write-Host "cpp build | run | dist"
+        #make a cppx help guide
+        Write-Host "cppx new class X"
+        Write-Host "cppx new module engine/render"
+        Write-Host "cppx new project X"
+        Write-Host "cppx build | run | dist"
     }
 }
