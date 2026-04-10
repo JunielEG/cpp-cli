@@ -128,7 +128,7 @@ function New-Class {
     New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
 
-    $inludePath = if ($dir) { "$dir/$class" } else { $class }
+    $includePath = if ($dir) { "$dir/$class" } else { $class }
 
     $repl = @{
         NAME            = $class
