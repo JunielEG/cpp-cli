@@ -182,9 +182,10 @@ new_project() {
     request_name
 
     mkdir -p "$name"/{src,include,build}
+    cd "$name" || return
 
-    apply_template "main.cpp.tpl" "NAME=$name" > "$name/src/main.cpp"
-    apply_template "CMakeLists.txt.tpl" "NAME=$name" > "$name/CMakeLists.txt"
+    apply_template "main.cpp.tpl" "NAME=$name" > "src/main.cpp"
+    apply_template "CMakeLists.txt.tpl" "NAME=$name" > "CMakeLists.txt"
 
     echo "Proyecto $name creado."
 }

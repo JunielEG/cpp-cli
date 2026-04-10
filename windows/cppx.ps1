@@ -14,12 +14,12 @@ $TEMPLATES = Join-Path $PSScriptRoot "templates"
 # HELP DATA 
 # -------------------------
 $COMMANDS = @(
-    @{ Group = "Scaffold"; Cmd = "cppx new project <name>"; Desc = "Crea proyecto con src/, include/, build/ y CMakeLists.txt" },
-    @{ Group = "Scaffold"; Cmd = "cppx new class <name>";   Desc = "Agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
-    @{ Group = "Scaffold"; Cmd = "cppx new module <name>";  Desc = "Agrega módulo con su propio subdirectorio" },
-    @{ Group = "Build";    Cmd = "cppx build";              Desc = "Configura y compila con CMake" },
-    @{ Group = "Build";    Cmd = "cppx run";                Desc = "Compila y ejecuta el binario resultante" },
-    @{ Group = "Build";    Cmd = "cppx dist";               Desc = "Build Release + empaca .exe y DLLs en dist/<proyecto>/" }
+    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new project <name>"; Desc = "Crea proyecto con src/, include/, build/ y CMakeLists.txt" },
+    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new class <name>";   Desc = "Agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new module <name>";  Desc = "Agrega módulo con su propio subdirectorio" },
+    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx build";              Desc = "Configura y compila con CMake" },
+    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx run";                Desc = "Compila y ejecuta el binario resultante" },
+    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx dist";               Desc = "Build Release + empaca .exe y DLLs en dist/<proyecto>/" }
 )
 
 # -------------------------
