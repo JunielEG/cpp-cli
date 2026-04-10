@@ -37,9 +37,6 @@ function Show-Help {
     Write-Host ""
 }
 
-# -------------------------
-# UTILS
-# -------------------------
 function Test-Name {
     param([string]$n)
     if (-not $n) { return $false }
@@ -74,18 +71,6 @@ function Test-CMake {
         return $false
     }
     return $true
-}
-
-function Add-To-CMake {
-    param([string]$file)
-    if (-not (Test-CMake)) { return }
-
-    $content = Get-Content "CMakeLists.txt" -Raw
-
-    if ($content -notmatch [regex]::Escape($file)) {
-        $updated = $content -replace "(?s)set\(SOURCES(.*?)\)", "set(SOURCES`$1    $file`n)"
-        Set-Content "CMakeLists.txt" $updated
-    }
 }
 
 function Get-Template {
@@ -143,8 +128,11 @@ function New-Class {
     New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
 
+    $inludePath = if ($dir) { "$dir/$class" } else { $class }
+
     $repl = @{
         NAME            = $class
+        INCLUDE_PATH    = $includePath
         NAMESPACE       = $ns
         NAMESPACE_OPEN  = $nsOpen
         NAMESPACE_CLOSE = $nsClose
@@ -157,7 +145,6 @@ function New-Class {
     Set-Content "$srcDir/$class.cpp" $source
 
     $cmakePath = if ($dir) { "src/$dir/$class.cpp" } else { "src/$class.cpp" }
-    Add-To-CMake $cmakePath
 
     Write-Host "Clase $name creada." -ForegroundColor Green
 }
@@ -185,8 +172,11 @@ function New-Module {
     New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
     New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
 
+    $includePath = $name  # ejemplo: program/test
+
     $repl = @{
         NAME            = $class
+        INCLUDE_PATH    = "$includePath/$class"
         NAMESPACE       = $ns
         NAMESPACE_OPEN  = $nsOpen
         NAMESPACE_CLOSE = $nsClose
@@ -197,8 +187,6 @@ function New-Module {
 
     Set-Content "$includeDir/$class.h" $header
     Set-Content "$srcDir/$class.cpp" $source
-
-    Add-To-CMake "src/$name/$class.cpp"
 
     Write-Host "Módulo $name creado." -ForegroundColor Green
 }
@@ -223,16 +211,51 @@ function New-Project {
 
 function Build {
     $compiler = Find-Compiler
-    Write-Host "Compilador: $compiler"
+    if ($compiler -eq "UNKNOWN") {
+        Write-Host "No se encontró ningún compilador (cl, g++, clang++)." -ForegroundColor Red
+        return $false
+    }
 
+    if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
+        Write-Host "cmake no está instalado o no está en el PATH." -ForegroundColor Red
+        return $false
+    }
+
+    Write-Host "Compilador: $compiler"
     cmake -S . -B build
-    cmake --build build
+    cmake --build build --config Debug
+    return $true
 }
 
 function Run {
-    Build
-    $exe = Get-ChildItem build -Filter *.exe -Recurse | Select-Object -First 1
-    if ($exe) { & $exe.FullName }
+    if (-not (Build)) { return }
+
+    $cmakeContent = Get-Content "CMakeLists.txt" -Raw
+    if ($cmakeContent -match 'project\((\w+)') {
+        $projectName = $Matches[1]
+    } else {
+        Write-Host "No se pudo leer el nombre del proyecto desde CMakeLists.txt." -ForegroundColor Red
+        return
+    }
+
+    $searchPaths = @(
+        "build/Debug/$projectName.exe",   # MSVC
+        "build/$projectName.exe",         # GCC / Clang (Unix Makefiles)
+        "build/Debug/$projectName",       # GCC en Linux/Mac (sin extensión)
+        "build/$projectName"
+    )
+
+    $exe = $searchPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+    if ($exe) {
+        Write-Host "`nRunning: $(Split-Path $exe -Leaf)`n" -ForegroundColor Green
+        & (Resolve-Path $exe)
+        Write-Host "`n`t---   End   ---`n" -ForegroundColor DarkGray
+    } else {
+        Write-Host "No se encontró el ejecutable '$projectName'." -ForegroundColor Red
+        Write-Host "Rutas buscadas:" -ForegroundColor DarkGray
+        $searchPaths | ForEach-Object { Write-Host "  - $_" -ForegroundColor DarkGray }
+    }
 }
 
 function Dist {
