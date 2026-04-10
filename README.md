@@ -134,9 +134,6 @@ dist/<project>/
 # Create a new project
 cppx new project myapp
 
-# Move into the project folder
-cd myapp
-
 # Add a class
 cppx new class Game
 
