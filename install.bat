@@ -6,7 +6,7 @@ set "REPO_URL=https://github.com/JunielEG/cpp-cli.git"
 set "INSTALL_DIR=%USERPROFILE%\ScaffoldingTools\%TOOL_NAME%"
 
 :: Si no encuentra los archivos los clona
-if exist "%~dp0cppx.bat" (
+if exist "%~dp0windows\cppx.bat" (
     echo Source found locally, installing from current folder...
     set "SOURCE_DIR=%~dp0"
 ) else (

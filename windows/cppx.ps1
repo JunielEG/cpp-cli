@@ -203,7 +203,7 @@ function New-Module {
     Write-Host "Módulo $name creado." -ForegroundColor Green
 }
 
-function New-Project {
+function New-Project { #//TODO que abra vs code
     Request-Name
 
     New-Item -ItemType Directory -Path $name | Out-Null
@@ -218,6 +218,7 @@ function New-Project {
     Set-Content "CMakeLists.txt" $cmake
 
     Write-Host "Proyecto $name creado." -ForegroundColor Green
+    code . 2>$null
 }
 
 function Build {

@@ -188,6 +188,7 @@ new_project() {
     apply_template "CMakeLists.txt.tpl" "NAME=$name" > "CMakeLists.txt"
 
     echo "Proyecto $name creado."
+    code . 2>/dev/null || true
 }
 
 cmd_build() {
