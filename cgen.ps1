@@ -1,0 +1,270 @@
+
+param(
+    [string]$cmd1,
+    [string]$cmd2,
+    [string]$name
+)
+
+# -------------------------
+# CONFIG
+# -------------------------
+$TEMPLATES = Join-Path $PSScriptRoot "templates"
+
+# -------------------------
+# UTILS
+# -------------------------
+function Test-Name {
+    param([string]$n)
+    if (-not $n) { return $false }
+    if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_/]*$') {
+        Write-Host "Nombre inválido." -ForegroundColor Red
+        return $false
+    }
+    return $true
+}
+
+function Request-Name {
+    while (-not (Test-Name $name)) {
+        $script:name = Read-Host "Name"
+    }
+}
+
+function Split-Path-Name {
+    $parts = $name -split "/"
+    $class = $parts[-1]
+    if ($parts.Length -gt 1) {
+        $ns = ($parts[0..($parts.Length - 2)] -join "::")
+    }
+    else {
+        $ns = ""
+    }
+    return @{ class = $class; namespace = $ns }
+}
+
+function Test-CMake {
+    if (-not (Test-Path "CMakeLists.txt")) {
+        Write-Host "No CMakeLists.txt" -ForegroundColor Red
+        return $false
+    }
+    return $true
+}
+
+function Add-To-CMake {
+    param([string]$file)
+    if (-not (Test-CMake)) { return }
+
+    $content = Get-Content "CMakeLists.txt" -Raw
+
+    if ($content -notmatch [regex]::Escape($file)) {
+        $updated = $content -replace "(?s)set\(SOURCES(.*?)\)", "set(SOURCES`$1    $file`n)"
+        Set-Content "CMakeLists.txt" $updated
+    }
+}
+
+function Get-Template {
+    param($file, $replacements)
+
+    $path = Join-Path $TEMPLATES $file
+    if (-not (Test-Path $path)) {
+        Write-Host "Template no encontrado: $file" -ForegroundColor Red
+        return ""
+    }
+
+    $content = Get-Content $path -Raw
+    foreach ($key in $replacements.Keys) {
+        $content = $content -replace "{{${key}}}", $replacements[$key]
+    }
+    return $content
+}
+
+function Find-Compiler {
+    if (Get-Command cl -ErrorAction SilentlyContinue) { return "MSVC" }
+    if (Get-Command g++ -ErrorAction SilentlyContinue) { return "GCC" }
+    if (Get-Command clang++ -ErrorAction SilentlyContinue) { return "CLANG" }
+    return "UNKNOWN"
+}
+
+# -------------------------
+# COMMANDS
+# -------------------------
+function New-Class {
+    Request-Name
+
+    $info = Split-Path-Name
+    $class = $info.class
+    $ns = $info.namespace
+
+    if ($ns) {
+        $nsOpen = "namespace $ns {"
+        $nsClose = "} // namespace $ns"
+    }
+    else {
+        $nsOpen = ""
+        $nsClose = ""
+    }
+
+    if ($ns) {
+        $dir = ($name -replace "/$class$", "")
+    }
+    else {
+        $dir = ""
+    }
+
+    $includeDir = if ($dir) { "include/$dir" } else { "include" }
+    $srcDir = if ($dir) { "src/$dir" }     else { "src" }
+
+    New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
+
+    $repl = @{
+        NAME            = $class
+        NAMESPACE       = $ns
+        NAMESPACE_OPEN  = $nsOpen
+        NAMESPACE_CLOSE = $nsClose
+    }
+
+    $header = Get-Template "class.h.tpl" $repl
+    $source = Get-Template "class.cpp.tpl" $repl
+
+    Set-Content "$includeDir/$class.h" $header
+    Set-Content "$srcDir/$class.cpp" $source
+
+    $cmakePath = if ($dir) { "src/$dir/$class.cpp" } else { "src/$class.cpp" }
+    Add-To-CMake $cmakePath
+
+    Write-Host "Clase $name creada." -ForegroundColor Green
+}
+
+function New-Module {
+    Request-Name
+
+    $info = Split-Path-Name
+    $class = $info.class
+    $ns = ($name -replace "/", "::")
+
+    if ($ns -and $ns -ne $class) {
+        $nsOpen = "namespace $ns {"
+        $nsClose = "} // namespace $ns"
+    }
+    else {
+        $ns = ""
+        $nsOpen = ""
+        $nsClose = ""
+    }
+
+    $includeDir = "include/$name"
+    $srcDir = "src/$name"
+
+    New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
+
+    $repl = @{
+        NAME            = $class
+        NAMESPACE       = $ns
+        NAMESPACE_OPEN  = $nsOpen
+        NAMESPACE_CLOSE = $nsClose
+    }
+
+    $header = Get-Template "module.h.tpl" $repl
+    $source = Get-Template "module.cpp.tpl" $repl
+
+    Set-Content "$includeDir/$class.h" $header
+    Set-Content "$srcDir/$class.cpp" $source
+
+    Add-To-CMake "src/$name/$class.cpp"
+
+    Write-Host "Módulo $name creado." -ForegroundColor Green
+}
+
+function New-Project {
+    Request-Name
+
+    New-Item -ItemType Directory -Path $name | Out-Null
+    Set-Location $name
+
+    mkdir src, include, build | Out-Null
+
+    $main = Get-Template "main.cpp.tpl" @{ NAME = $name }
+    Set-Content "src/main.cpp" $main
+
+    $cmake = Get-Template "CMakeLists.txt.tpl" @{ NAME = $name }
+    Set-Content "CMakeLists.txt" $cmake
+
+    Write-Host "Proyecto $name creado." -ForegroundColor Green
+}
+
+function Build {
+    $compiler = Find-Compiler
+    Write-Host "Compilador: $compiler"
+
+    cmake -S . -B build
+    cmake --build build
+}
+
+function Run {
+    Build
+    $exe = Get-ChildItem build -Filter *.exe -Recurse | Select-Object -First 1
+    if ($exe) { & $exe.FullName }
+}
+
+function Dist {
+    if (-not (Test-CMake)) { return }
+
+    $projectName = (Get-Content "CMakeLists.txt" -Raw) -match 'project\((\w+)\)' | Out-Null
+    $projectName = $Matches[1]
+
+    Write-Host "Compilando en modo Release..." -ForegroundColor Cyan
+    cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+    cmake --build build/release --config Release
+
+    $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Select-Object -First 1
+    if (-not $exe) {
+        Write-Host "No se encontró .exe tras compilar." -ForegroundColor Red
+        return
+    }
+
+    $distDir = "dist/$projectName"
+    New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+
+    Copy-Item $exe.FullName "$distDir/$($exe.Name)" -Force
+
+    $dllSource = $exe.DirectoryName
+    Get-ChildItem $dllSource -Filter "*.dll" | ForEach-Object {
+        Copy-Item $_.FullName "$distDir/$($_.Name)" -Force
+        Write-Host "  + $($_.Name)" -ForegroundColor DarkGray
+    }
+
+    Write-Host ""
+    Write-Host "Distribuible generado en: $distDir" -ForegroundColor Green
+    Write-Host "Ejecutable: $($exe.Name)"
+}
+
+# -------------------------
+# AUTOCOMPLETE
+# -------------------------
+Register-ArgumentCompleter -CommandName cpp.ps1 -ScriptBlock {
+    param($wordToComplete, $commandAst)
+    "new", "build", "run" | Where-Object { $_ -like "$wordToComplete*" }
+}
+
+# -------------------------
+# ROUTER
+# -------------------------
+switch ($cmd1) {
+    "new" {
+        switch ($cmd2) {
+            "class" { New-Class }
+            "module" { New-Module }
+            "project" { New-Project }
+        }
+    }
+    "build" { Build }
+    "run" { Run }
+    "dist" { Dist }
+    default {
+        Write-Host "cpp new class X"
+        Write-Host "cpp new module engine/render"
+        Write-Host "cpp new project X"
+        Write-Host "cpp build | run | dist"
+    }
+}
