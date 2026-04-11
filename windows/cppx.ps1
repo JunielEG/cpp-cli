@@ -1,47 +1,62 @@
-
 param(
     [string]$cmd1,
     [string]$cmd2,
     [string]$name
 )
 
-# -------------------------
-# CONFIG
-# -------------------------
 $TEMPLATES = Join-Path $PSScriptRoot "templates"
 
-# -------------------------
-# HELP DATA 
-# -------------------------
 $COMMANDS = @(
-    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new project <name>"; Desc = "Crea proyecto con src/, include/, build/ y CMakeLists.txt" },
-    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new class <name>";   Desc = "Agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
-    [PSCustomObject]@{ Group = "Scaffold"; Cmd = "cppx new module <name>";  Desc = "Agrega módulo con su propio subdirectorio" },
-    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx build";              Desc = "Configura y compila con CMake" },
-    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx run";                Desc = "Compila y ejecuta el binario resultante" },
-    [PSCustomObject]@{ Group = "Build";    Cmd = "cppx dist";               Desc = "Build Release + empaca .exe y DLLs en dist/<proyecto>/" }
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>"; Desc = "crea proyecto con src/, include/, build/ y CMakeLists.txt" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <name>";   Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <name>";  Desc = "agrega módulo con su propio subdirectorio" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx build";              Desc = "configura y compila con CMake" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx run";                Desc = "compila y ejecuta el binario resultante" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx dist";               Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" }
 )
 
-# -------------------------
-# UTILS
-# -------------------------
-function Show-Help {
-    $groups = $COMMANDS | Select-Object -ExpandProperty Group -Unique
-    foreach ($g in $groups) {
-        Write-Host "`n  $g" -ForegroundColor DarkGray
-        $COMMANDS | Where-Object { $_.Group -eq $g } | ForEach-Object {
-            Write-Host ("  {0,-30}" -f $_.Cmd) -ForegroundColor Cyan -NoNewline
-            Write-Host $_.Desc -ForegroundColor Gray
-        }
-    }
+# -- UI helpers ---------------------------------------------------------------
+
+function Write-Header([string]$title) {
+    Write-Host ""
+    Write-Host "  $title" -ForegroundColor Cyan
+    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
     Write-Host ""
 }
 
-function Test-Name {
-    param([string]$n)
+function Write-Row([string]$label, [string]$msg, [string]$status = "ok") {
+    $icon  = switch ($status) { "ok" { "+" } "warn" { "!" } "skip" { "-" } "none" { "." } default { " " } }
+    $color = switch ($status) { "ok" { "Green" } "warn" { "Yellow" } default { "DarkGray" } }
+    Write-Host ("  {0,-10}" -f $label) -ForegroundColor DarkGray -NoNewline
+    Write-Host "$icon  " -ForegroundColor $color -NoNewline
+    Write-Host $msg -ForegroundColor Gray
+}
+
+function Write-Fail([string]$msg) {
+    Write-Host ""
+    Write-Host "  error  $msg" -ForegroundColor Red
+    Write-Host ""
+}
+
+# -- Helpers ------------------------------------------------------------------
+
+function Show-Help {
+    Write-Header "cppx"
+    $groups = $COMMANDS | Select-Object -ExpandProperty Group -Unique
+    foreach ($g in $groups) {
+        Write-Host "  $g" -ForegroundColor DarkGray
+        $COMMANDS | Where-Object { $_.Group -eq $g } | ForEach-Object {
+            Write-Host ("  {0,-28}" -f $_.Cmd) -ForegroundColor Cyan -NoNewline
+            Write-Host $_.Desc -ForegroundColor DarkGray
+        }
+        Write-Host ""
+    }
+}
+
+function Test-Name([string]$n) {
     if (-not $n) { return $false }
     if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_/]*$') {
-        Write-Host "Nombre inválido." -ForegroundColor Red
+        Write-Fail "nombre inválido: '$n'"
         return $false
     }
     return $true
@@ -49,39 +64,31 @@ function Test-Name {
 
 function Request-Name {
     while (-not (Test-Name $name)) {
-        $script:name = Read-Host "Name"
+        $script:name = Read-Host "  name"
     }
 }
 
 function Split-Path-Name {
     $parts = $name -split "/"
     $class = $parts[-1]
-    if ($parts.Length -gt 1) {
-        $ns = ($parts[0..($parts.Length - 2)] -join "::")
-    }
-    else {
-        $ns = ""
-    }
+    $ns    = if ($parts.Length -gt 1) { ($parts[0..($parts.Length - 2)] -join "::") } else { "" }
     return @{ class = $class; namespace = $ns }
 }
 
 function Test-CMake {
     if (-not (Test-Path "CMakeLists.txt")) {
-        Write-Host "No CMakeLists.txt" -ForegroundColor Red
+        Write-Fail "CMakeLists.txt no encontrado"
         return $false
     }
     return $true
 }
 
-function Get-Template {
-    param($file, $replacements)
-
+function Get-Template([string]$file, [hashtable]$replacements) {
     $path = Join-Path $TEMPLATES $file
     if (-not (Test-Path $path)) {
-        Write-Host "Template no encontrado: $file" -ForegroundColor Red
+        Write-Fail "template no encontrado: $file"
         return ""
     }
-
     $content = Get-Content $path -Raw
     foreach ($key in $replacements.Keys) {
         $content = $content -replace "{{${key}}}", $replacements[$key]
@@ -90,43 +97,31 @@ function Get-Template {
 }
 
 function Find-Compiler {
-    if (Get-Command cl -ErrorAction SilentlyContinue) { return "MSVC" }
-    if (Get-Command g++ -ErrorAction SilentlyContinue) { return "GCC" }
+    if (Get-Command cl     -ErrorAction SilentlyContinue) { return "MSVC"  }
+    if (Get-Command g++    -ErrorAction SilentlyContinue) { return "GCC"   }
     if (Get-Command clang++ -ErrorAction SilentlyContinue) { return "CLANG" }
     return "UNKNOWN"
 }
 
-# -------------------------
-# COMMANDS
-# -------------------------
+# -- Commands -----------------------------------------------------------------
+
 function New-Class {
     Request-Name
+    Write-Header "new class  ->  $name"
 
     $info = Split-Path-Name
     $class = $info.class
-    $ns = $info.namespace
+    $ns    = $info.namespace
 
-    if ($ns) {
-        $nsOpen = "namespace $ns {"
-        $nsClose = "} // namespace $ns"
-    }
-    else {
-        $nsOpen = ""
-        $nsClose = ""
-    }
-
-    if ($ns) {
-        $dir = ($name -replace "/$class$", "")
-    }
-    else {
-        $dir = ""
-    }
+    $nsOpen  = if ($ns) { "namespace $ns {" }    else { "" }
+    $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
+    $dir     = if ($ns) { ($name -replace "/$class$", "") } else { "" }
 
     $includeDir = if ($dir) { "include/$dir" } else { "include" }
-    $srcDir = if ($dir) { "src/$dir" }     else { "src" }
+    $srcDir     = if ($dir) { "src/$dir" }     else { "src" }
 
-    New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
+    $null = New-Item -ItemType Directory -Force -Path $includeDir
+    $null = New-Item -ItemType Directory -Force -Path $srcDir
 
     $includePath = if ($dir) { "$dir/$class" } else { $class }
 
@@ -138,92 +133,87 @@ function New-Class {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    $header = Get-Template "class.h.tpl" $repl
-    $source = Get-Template "class.cpp.tpl" $repl
+    Set-Content "$includeDir/$class.h"   (Get-Template "class.h.tpl"   $repl)
+    Set-Content "$srcDir/$class.cpp"     (Get-Template "class.cpp.tpl" $repl)
 
-    Set-Content "$includeDir/$class.h" $header
-    Set-Content "$srcDir/$class.cpp" $source
-
-    $cmakePath = if ($dir) { "src/$dir/$class.cpp" } else { "src/$class.cpp" }
-
-    Write-Host "Clase $name creada." -ForegroundColor Green
+    Write-Row "header"  "$includeDir/$class.h"
+    Write-Row "source"  "$srcDir/$class.cpp"
+    if ($ns) { Write-Row "namespace" $ns }
 }
 
 function New-Module {
     Request-Name
+    Write-Header "new module  ->  $name"
 
-    $info = Split-Path-Name
+    $info  = Split-Path-Name
     $class = $info.class
-    $ns = ($name -replace "/", "::")
+    $ns    = ($name -replace "/", "::")
 
-    if ($ns -and $ns -ne $class) {
-        $nsOpen = "namespace $ns {"
-        $nsClose = "} // namespace $ns"
-    }
-    else {
-        $ns = ""
-        $nsOpen = ""
-        $nsClose = ""
-    }
+    if ($ns -eq $class) { $ns = "" }
+    $nsOpen  = if ($ns) { "namespace $ns {" }    else { "" }
+    $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
 
-    $includeDir = "include/$name"
-    $srcDir = "src/$name"
+    $includeDir  = "include/$name"
+    $srcDir      = "src/$name"
 
-    New-Item -ItemType Directory -Force -Path $includeDir | Out-Null
-    New-Item -ItemType Directory -Force -Path $srcDir | Out-Null
-
-    $includePath = $name  # ejemplo: program/test
+    $null = New-Item -ItemType Directory -Force -Path $includeDir
+    $null = New-Item -ItemType Directory -Force -Path $srcDir
 
     $repl = @{
         NAME            = $class
-        INCLUDE_PATH    = "$includePath/$class"
+        INCLUDE_PATH    = "$name/$class"
         NAMESPACE       = $ns
         NAMESPACE_OPEN  = $nsOpen
         NAMESPACE_CLOSE = $nsClose
     }
 
-    $header = Get-Template "module.h.tpl" $repl
-    $source = Get-Template "module.cpp.tpl" $repl
+    Set-Content "$includeDir/$class.h"  (Get-Template "module.h.tpl"   $repl)
+    Set-Content "$srcDir/$class.cpp"    (Get-Template "module.cpp.tpl" $repl)
 
-    Set-Content "$includeDir/$class.h" $header
-    Set-Content "$srcDir/$class.cpp" $source
-
-    Write-Host "Módulo $name creado." -ForegroundColor Green
+    Write-Row "header"  "$includeDir/$class.h"
+    Write-Row "source"  "$srcDir/$class.cpp"
+    if ($ns) { Write-Row "namespace" $ns }
 }
 
 function New-Project {
     Request-Name
+    Write-Header "new project  ->  $name"
 
-    New-Item -ItemType Directory -Path $name | Out-Null
+    $null = New-Item -ItemType Directory -Path $name
     Set-Location $name
+    $null = mkdir src, include, build
 
-    mkdir src, include, build | Out-Null
+    Set-Content "src/main.cpp"    (Get-Template "main.cpp.tpl"       @{ NAME = $name })
+    Set-Content "CMakeLists.txt"  (Get-Template "CMakeLists.txt.tpl" @{ NAME = $name })
 
-    $main = Get-Template "main.cpp.tpl" @{ NAME = $name }
-    Set-Content "src/main.cpp" $main
+    Write-Row "dirs"    "src/  include/  build/"
+    Write-Row "cmake"   "CMakeLists.txt"
+    Write-Row "entry"   "src/main.cpp"
 
-    $cmake = Get-Template "CMakeLists.txt.tpl" @{ NAME = $name }
-    Set-Content "CMakeLists.txt" $cmake
-
-    Write-Host "Proyecto $name creado." -ForegroundColor Green
     code . 2>$null
 }
 
 function Build {
+    Write-Header "build"
+
     $compiler = Find-Compiler
     if ($compiler -eq "UNKNOWN") {
-        Write-Host "No se encontró ningún compilador (cl, g++, clang++)." -ForegroundColor Red
+        Write-Fail "no se encontró ningún compilador (cl, g++, clang++)"
         return $false
     }
-
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-        Write-Host "cmake no está instalado o no está en el PATH." -ForegroundColor Red
+        Write-Fail "cmake no está instalado o no está en el PATH"
         return $false
     }
 
-    Write-Host "Compilador: $compiler"
+    Write-Row "compiler" $compiler
+    Write-Host ""
+
     cmake -S . -B build
     cmake --build build --config Debug
+
+    Write-Host ""
+    Write-Row "build" "debug  ->  build/" "ok"
     return $true
 }
 
@@ -231,68 +221,75 @@ function Run {
     if (-not (Build)) { return }
 
     $cmakeContent = Get-Content "CMakeLists.txt" -Raw
-    if ($cmakeContent -match 'project\((\w+)') {
-        $projectName = $Matches[1]
-    } else {
-        Write-Host "No se pudo leer el nombre del proyecto desde CMakeLists.txt." -ForegroundColor Red
+    if ($cmakeContent -notmatch 'project\((\w+)') {
+        Write-Fail "no se pudo leer el nombre del proyecto desde CMakeLists.txt"
         return
     }
+    $projectName = $Matches[1]
 
     $searchPaths = @(
-        "build/Debug/$projectName.exe",   # MSVC
-        "build/$projectName.exe",         # GCC / Clang (Unix Makefiles)
-        "build/Debug/$projectName",       # GCC en Linux/Mac (sin extensión)
+        "build/Debug/$projectName.exe",
+        "build/$projectName.exe",
+        "build/Debug/$projectName",
         "build/$projectName"
     )
 
     $exe = $searchPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-    if ($exe) {
-        Write-Host "`nRunning: $(Split-Path $exe -Leaf)`n" -ForegroundColor Green
-        & (Resolve-Path $exe)
-        Write-Host "`n`t---   End   ---`n" -ForegroundColor DarkGray
-    } else {
-        Write-Host "No se encontró el ejecutable '$projectName'." -ForegroundColor Red
-        Write-Host "Rutas buscadas:" -ForegroundColor DarkGray
-        $searchPaths | ForEach-Object { Write-Host "  - $_" -ForegroundColor DarkGray }
+    if (-not $exe) {
+        Write-Fail "ejecutable '$projectName' no encontrado"
+        Write-Host "  buscado en:" -ForegroundColor DarkGray
+        $searchPaths | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        return
     }
+
+    Write-Host ""
+    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  $projectName" -ForegroundColor Green
+    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
+    Write-Host ""
+
+    & (Resolve-Path $exe)
+
+    Write-Host ""
+    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  exit" -ForegroundColor DarkGray
+    Write-Host ""
 }
 
 function Dist {
     if (-not (Test-CMake)) { return }
+    Write-Header "dist"
 
-    $projectName = (Get-Content "CMakeLists.txt" -Raw) -match 'project\((\w+)\)' | Out-Null
+    $cmakeContent = Get-Content "CMakeLists.txt" -Raw
+    $null = $cmakeContent -match 'project\((\w+)\)'
     $projectName = $Matches[1]
 
-    Write-Host "Compilando en modo Release..." -ForegroundColor Cyan
+    Write-Row "mode" "release"
+
     cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
     cmake --build build/release --config Release
 
     $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Select-Object -First 1
     if (-not $exe) {
-        Write-Host "No se encontró .exe tras compilar." -ForegroundColor Red
+        Write-Fail "no se encontró .exe tras compilar"
         return
     }
 
     $distDir = "dist/$projectName"
-    New-Item -ItemType Directory -Force -Path $distDir | Out-Null
+    $null = New-Item -ItemType Directory -Force -Path $distDir
 
     Copy-Item $exe.FullName "$distDir/$($exe.Name)" -Force
+    Write-Row "exe" $exe.Name
 
-    $dllSource = $exe.DirectoryName
-    Get-ChildItem $dllSource -Filter "*.dll" | ForEach-Object {
+    Get-ChildItem $exe.DirectoryName -Filter "*.dll" | ForEach-Object {
         Copy-Item $_.FullName "$distDir/$($_.Name)" -Force
-        Write-Host "  + $($_.Name)" -ForegroundColor DarkGray
+        Write-Row "dll" $_.Name
     }
-
-    Write-Host ""
-    Write-Host "Distribuible generado en: $distDir" -ForegroundColor Green
-    Write-Host "Ejecutable: $($exe.Name)"
 }
 
-# -------------------------
-# ROUTER
-# -------------------------
+# -- Router -------------------------------------------------------------------
+
 switch ($cmd1) {
     "new" {
         switch ($cmd2) {
@@ -302,8 +299,8 @@ switch ($cmd1) {
             default   { Show-Help }
         }
     }
-    "build"   { Build }
-    "run"     { Run }
-    "dist"    { Dist }
-    default   { Show-Help }
+    "build" { Build | Out-Null }
+    "run"   { Run }
+    "dist"  { Dist }
+    default { Show-Help }
 }
