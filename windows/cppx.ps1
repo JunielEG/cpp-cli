@@ -262,15 +262,19 @@ function Dist {
     Write-Header "dist"
 
     $cmakeContent = Get-Content "CMakeLists.txt" -Raw
-    $null = $cmakeContent -match 'project\((\w+)\)'
-    $projectName = $Matches[1]
-
+    if ($cmakeContent -match 'project\(\s*(\w+)') {
+        $projectName = $Matches[1]
+    } else {
+        Write-Fail "no se pudo leer el nombre del proyecto en CMakeLists.txt"
+        return
+    }
     Write-Row "mode" "release"
 
     cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
     cmake --build build/release --config Release
 
-    $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Select-Object -First 1
+    $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Where-Object { $_.Name -notlike "CompilerId*" } | Select-Object -First 1
+
     if (-not $exe) {
         Write-Fail "no se encontró .exe tras compilar"
         return
