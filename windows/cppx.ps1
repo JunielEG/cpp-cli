@@ -291,14 +291,6 @@ function Dist {
 }
 
 # -------------------------
-# AUTOCOMPLETE
-# -------------------------
-Register-ArgumentCompleter -CommandName cpp.ps1 -ScriptBlock {
-    param($wordToComplete, $commandAst)
-    "new", "build", "run" | Where-Object { $_ -like "$wordToComplete*" }
-}
-
-# -------------------------
 # ROUTER
 # -------------------------
 switch ($cmd1) {

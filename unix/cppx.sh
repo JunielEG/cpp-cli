@@ -42,7 +42,6 @@ request_name() {
     done
 }
 
-# Returns: sets globals $CLASS and $NAMESPACE
 split_path_name() {
     IFS='/' read -ra parts <<< "$name"
     CLASS="${parts[-1]}"
