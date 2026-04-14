@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cppx.sh — C++ project scaffold tool (Bash port of cppx.ps1)
 
-#//TODO: hay que cambiar todo para que tenga las novedades implementadas en el .bat, pedir a una IA y despues resolver bugs 6hrs
+#//TODO: hay que cambiar todo para que tenga las novedades implementadas en el .bat, pedir a una IA y despues resolver bugs 6hrs, esto no es actualizado desde el: 10/3/2026
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
