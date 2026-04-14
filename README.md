@@ -6,10 +6,8 @@
 
 ## Requirements
 
-Before installing, make sure you have the following tools available in your system:
-
 - **CMake** — [cmake.org/download](https://cmake.org/download/)
-- **C++ compiler** — either [MSVC (Visual Studio)](https://visualstudio.microsoft.com/), [MinGW (g++)](https://www.mingw-w64.org/), or [Clang](https://clang.llvm.org/)
+- **C++ compiler** — [MSVC](https://visualstudio.microsoft.com/), [MinGW (g++)](https://www.mingw-w64.org/), or [Clang](https://clang.llvm.org/)
 
 `cppx` will auto-detect which compiler is available at build time.
 
@@ -45,9 +43,9 @@ Both scripts will:
 
 On Unix, the PATH entry is added to the first profile file found: `.zshrc`, `.bashrc`, `.bash_profile`, or `.profile`.
 
-**3. Open a new terminal** (existing ones won't have the updated PATH yet) and verify:
+**3. Open a new terminal** and verify:
 ```bash
-cppx help
+cppx
 ```
 
 ---
@@ -56,37 +54,58 @@ cppx help
 
 | Command | Description |
 |---|---|
-| `cppx new project <name>` | Creates a new C++ project with full folder structure |
+| `cppx new project <name>/<arch>` | Creates a new C++ project with the specified architecture |
 | `cppx new class <name>` | Adds a `.h`/`.cpp` pair to the current project |
 | `cppx new module <name>` | Adds a module with its own subdirectory inside `src/` and `include/` |
 | `cppx build` | Configures and compiles the project using CMake |
 | `cppx run` | Builds and runs the compiled executable |
 | `cppx dist` | Builds in Release mode and packages the `.exe` + DLLs into `dist/<project>/` |
-| `cppx help` | Lists all available commands |
+
+---
+
+## Architectures
+
+Every project requires an architecture. Run `cppx new project` without arguments to see the full list. Available architectures:
+
+| Name | Description | Structure |
+|---|---|---|
+| `small` | src / include | Minimal layout for small projects |
+| `mvc` | Model - View - Controller | Separates data, presentation, and logic |
+| `features` | Feature-based | One folder per feature, self-contained |
+| `layered` | Por capas | Horizontal layers (presentation, domain, data) |
+| `cleanarc` | Clean Architecture | Entities, use cases, interfaces, infrastructure |
 
 ---
 
 ## What each command generates
 
-### `cppx new project <name>`
+### `cppx new project <name>/<arch>`
 
-Creates the following structure in a new folder:
+Creates a new folder named `<name>` with the folder structure defined by the chosen architecture.
+
+```bash
+cppx new project myapp/mvc
+```
 
 ```
-<name>/
+myapp/
 ├── src/
+│   ├── model/
+│   ├── view/
+│   ├── controller/
 │   └── main.cpp
-├── include/
 ├── build/
-└── CMakeLists.txt
+├── CMakeLists.txt
+└── .cppx
 ```
 
 - `main.cpp` includes a ready-to-compile entry point.
-- `CMakeLists.txt` is pre-configured with C++17 and the project name.
+- `CMakeLists.txt` is pre-configured with C++17, `file(GLOB_RECURSE)` over `src/`, and includes for both `include/` and `src/`.
+- `.cppx` stores project metadata (name and architecture). It is used by other commands to stay consistent with the project layout.
 
 ### `cppx new class <name>`
 
-Adds a `.h`/`.cpp` pair to an existing project. Must be run from the project root (where `CMakeLists.txt` is).
+Adds a `.h`/`.cpp` pair to an existing project. Must be run from the project root.
 
 ```
 include/<name>.h
@@ -99,14 +118,14 @@ Supports namespace paths using `/` as separator:
 cppx new class engine/Renderer
 # generates: include/engine/Renderer.h
 #            src/engine/Renderer.cpp
-# namespace:  engine::Renderer
+# namespace:  engine
 ```
 
-The new `.cpp` file is automatically added to the `SOURCES` list in `CMakeLists.txt`.
+If the project has an architecture defined in `.cppx`, cppx will remind you to verify that the target subdirectory matches the architecture conventions.
 
 ### `cppx new module <name>`
 
-Similar to `new class`, but creates a dedicated subdirectory for the module under both `src/` and `include/`:
+Similar to `new class`, but creates a dedicated subdirectory for the module:
 
 ```bash
 cppx new module audio/Mixer
@@ -123,7 +142,7 @@ Builds the project in Release mode and collects the output into a distributable 
 ```
 dist/<project>/
 ├── <project>.exe
-└── *.dll  (any DLLs found next to the executable)
+└── *.dll
 ```
 
 ---
@@ -131,13 +150,10 @@ dist/<project>/
 ## Quick start
 
 ```bash
-# Create a new project
-cppx new project myapp
+cppx new project myapp/small
 
-# Add a class
 cppx new class Game
 
-# Build and run
 cppx run
 ```
 
@@ -145,11 +161,7 @@ cppx run
 
 ## Installed file location
 
-After running the install script, the tool files live at:
-
 | Platform | Path |
 |---|---|
 | Windows | `%USERPROFILE%\ScaffoldingTools\cpp-cli\` |
 | Linux / macOS | `~/ScaffoldingTools/cpp-cli/` |
-
-You don't need to interact with these folders directly.
