@@ -4,15 +4,30 @@ param(
     [string]$name
 )
 
-$TEMPLATES = Join-Path $PSScriptRoot "templates"
+$FILETEMPLATES = Join-Path $PSScriptRoot "templates/files"
+$ARCHTEMPLATES = Join-Path $PSScriptRoot "templates/architectures"
 
 $COMMANDS = @(
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>"; Desc = "crea proyecto con src/, include/, build/ y CMakeLists.txt" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <name>";   Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <name>";  Desc = "agrega módulo con su propio subdirectorio" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx build";              Desc = "configura y compila con CMake" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx run";                Desc = "compila y ejecuta el binario resultante" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx dist";               Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" }
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>";       Desc = "crea proyecto con CMakeLists.txt" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>/<arch>"; Desc = "crea proyecto con arquitectura (ej: mvc, small)" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <name>";          Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <name>";         Desc = "agrega modulo con su propio subdirectorio" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx build";                     Desc = "configura y compila con CMake" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx run";                       Desc = "compila y ejecuta el binario resultante" },
+    [PSCustomObject]@{ Group = "build";    Cmd = "cppx dist";                      Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" }
+)
+
+$KNOWN_FILES = @{
+    "main.cpp"       = "main.cpp.tpl"
+    "CMakeLists.txt" = "CMakeLists.txt.tpl"
+}
+
+$ARCHITECTURES = @(
+    [PSCustomObject]@{ Name = "small";    Desc = "Estructura simple: headers en include, codigo en src." },
+    [PSCustomObject]@{ Name = "mvc";      Desc = "Separa datos, interfaz y control de flujo." },
+    [PSCustomObject]@{ Name = "features"; Desc = "Organiza por funcionalidad, cada modulo es autonomo." },
+    [PSCustomObject]@{ Name = "layered";  Desc = "Divide en capas: UI, logica, dominio, infraestructura." },
+    [PSCustomObject]@{ Name = "cleanarc"; Desc = "Capas desacopladas, dominio independiente del resto." }
 )
 
 # -- UI helpers ---------------------------------------------------------------
@@ -46,17 +61,31 @@ function Show-Help {
     foreach ($g in $groups) {
         Write-Host "  $g" -ForegroundColor DarkGray
         $COMMANDS | Where-Object { $_.Group -eq $g } | ForEach-Object {
-            Write-Host ("  {0,-28}" -f $_.Cmd) -ForegroundColor Cyan -NoNewline
+            Write-Host ("  {0,-36}" -f $_.Cmd) -ForegroundColor Cyan -NoNewline
             Write-Host $_.Desc -ForegroundColor DarkGray
         }
         Write-Host ""
     }
 }
 
+function Show-Architectures {
+    Write-Host ""
+    Write-Host "  arquitecturas disponibles" -ForegroundColor Cyan
+    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
+    Write-Host ""
+    $ARCHITECTURES | ForEach-Object {
+        Write-Host ("  {0,-12}" -f $_.Name) -ForegroundColor Cyan -NoNewline
+        Write-Host $_.Desc -ForegroundColor DarkGray
+    }
+    Write-Host ""
+    Write-Host "  uso: cppx new project <nombre>/<arch>" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 function Test-Name([string]$n) {
     if (-not $n) { return $false }
     if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_/]*$') {
-        Write-Fail "nombre inválido: '$n'"
+        Write-Fail "nombre invalido: '$n'"
         return $false
     }
     return $true
@@ -84,7 +113,7 @@ function Test-CMake {
 }
 
 function Get-Template([string]$file, [hashtable]$replacements) {
-    $path = Join-Path $TEMPLATES $file
+    $path = Join-Path $FILETEMPLATES $file
     if (-not (Test-Path $path)) {
         Write-Fail "template no encontrado: $file"
         return ""
@@ -97,10 +126,134 @@ function Get-Template([string]$file, [hashtable]$replacements) {
 }
 
 function Find-Compiler {
-    if (Get-Command cl     -ErrorAction SilentlyContinue) { return "MSVC"  }
-    if (Get-Command g++    -ErrorAction SilentlyContinue) { return "GCC"   }
+    if (Get-Command cl      -ErrorAction SilentlyContinue) { return "MSVC"  }
+    if (Get-Command g++     -ErrorAction SilentlyContinue) { return "GCC"   }
     if (Get-Command clang++ -ErrorAction SilentlyContinue) { return "CLANG" }
     return "UNKNOWN"
+}
+
+# -- YAML parser --------------------------------------------------------------
+# Soporta el subset usado en los archivos de arquitectura:
+#   - Listas con "- key:" (nodos directorio)
+#   - Listas con "- file.ext" (nodos archivo conocido)
+#   - Indentacion con espacios (2 o 4 por nivel)
+# Devuelve un arbol de objetos @{ name; type; children }
+
+function Parse-ArchYaml([string]$yamlPath) {
+    if (-not (Test-Path $yamlPath)) {
+        Write-Fail "arquitectura no encontrada: $yamlPath"
+        return $null
+    }
+
+    $lines = Get-Content $yamlPath
+
+    # Construye una lista plana de tokens { indent; name; isDir }
+    $tokens = [System.Collections.Generic.List[hashtable]]::new()
+
+    foreach ($line in $lines) {
+        # Ignorar lineas vacias y comentarios
+        if ($line -match '^\s*$' -or $line -match '^\s*#') { continue }
+
+        # Solo procesar lineas que empiecen con "- "
+        if ($line -notmatch '^(\s*)-\s+(.+)$') { continue }
+
+        $indent  = $Matches[1].Length
+        $content = $Matches[2].Trim()
+
+        # "key:" -> directorio   |   "file.ext" -> archivo conocido
+        if ($content -match '^([A-Za-z0-9_./-]+):$') {
+            $tokens.Add(@{ indent = $indent; name = $Matches[1]; isDir = $true })
+        } elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
+            $tokens.Add(@{ indent = $indent; name = $content;    isDir = $false })
+        }
+    }
+
+    # Convierte la lista plana en arbol usando una pila
+    $root     = @{ name = "root"; isDir = $true; children = [System.Collections.Generic.List[hashtable]]::new() }
+    $stack    = [System.Collections.Generic.Stack[hashtable]]::new()
+    $indStack = [System.Collections.Generic.Stack[int]]::new()
+
+    $stack.Push($root)
+    $indStack.Push(-1)
+
+    foreach ($tok in $tokens) {
+        # Sube en la pila hasta encontrar el padre correcto
+        while ($indStack.Count -gt 1 -and $tok.indent -le $indStack.Peek()) {
+            $null = $stack.Pop()
+            $null = $indStack.Pop()
+        }
+
+        $node = @{
+            name     = $tok.name
+            isDir    = $tok.isDir
+            children = [System.Collections.Generic.List[hashtable]]::new()
+        }
+
+        $stack.Peek().children.Add($node)
+
+        if ($tok.isDir) {
+            $stack.Push($node)
+            $indStack.Push($tok.indent)
+        }
+    }
+
+    return $root
+}
+
+# Recorre el arbol y crea la estructura en disco
+function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
+    foreach ($child in $node.children) {
+        $childPath = Join-Path $basePath $child.name
+
+        if ($child.isDir) {
+            $null = New-Item -ItemType Directory -Force -Path $childPath
+            Write-Row "dir" $childPath.Replace((Get-Location).Path + "\", "")
+            Build-TreeFromYaml $child $childPath $projectName
+        } else {
+            # Archivo conocido -> genera desde template
+            if ($KNOWN_FILES.ContainsKey($child.name)) {
+                $tplName = $KNOWN_FILES[$child.name]
+                $content = Get-Template $tplName @{ NAME = $projectName }
+                Set-Content $childPath $content
+                Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "")
+            } else {
+                # Archivo desconocido -> crea vacio con advertencia
+                Set-Content $childPath ""
+                Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "") "warn"
+            }
+        }
+    }
+}
+
+# Escribe el archivo .cppx en el directorio actual
+function Write-CppxMeta([string]$projectName, [string]$arch) {
+    $content = "NAME=$projectName`nARCH=$arch"
+    Set-Content ".cppx" $content
+    Write-Row "meta" ".cppx  (NAME=$projectName, ARCH=$arch)"
+}
+
+# Lee el archivo .cppx del proyecto actual (si existe)
+function Read-CppxMeta {
+    if (-not (Test-Path ".cppx")) { return @{} }
+    $meta = @{}
+    Get-Content ".cppx" | ForEach-Object {
+        if ($_ -match '^([A-Z]+)=(.*)$') {
+            $meta[$Matches[1]] = $Matches[2]
+        }
+    }
+    return $meta
+}
+
+# -- Parse project name/arch --------------------------------------------------
+# Separa "test/mvc" en @{ project = "test"; arch = "mvc" }
+# Si no hay "/", arch queda vacio y se usa default.yaml
+
+function Parse-ProjectName([string]$raw) {
+    $parts = $raw -split "/"
+    if ($parts.Length -eq 2) {
+        return @{ project = $parts[0]; arch = $parts[1] }
+    }
+    return @{ project = $parts[0]; arch = "" }
 }
 
 # -- Commands -----------------------------------------------------------------
@@ -139,6 +292,11 @@ function New-Class {
     Write-Row "header"  "$includeDir/$class.h"
     Write-Row "source"  "$srcDir/$class.cpp"
     if ($ns) { Write-Row "namespace" $ns }
+
+    $meta = Read-CppxMeta
+    if ($meta.ContainsKey("ARCH") -and $meta["ARCH"]) {
+        Write-Row "arch" "proyecto usa '$($meta["ARCH"])' - verifica que el subdirectorio sea correcto" "warn"
+    }
 }
 
 function New-Module {
@@ -179,16 +337,43 @@ function New-Project {
     Request-Name
     Write-Header "new project  ->  $name"
 
-    $null = New-Item -ItemType Directory -Path $name
-    Set-Location $name
-    $null = mkdir src, include, build
+    # Separar nombre de arquitectura
+    $parsed      = Parse-ProjectName $name
+    $projectName = $parsed.project
+    $archName    = $parsed.arch
 
-    Set-Content "src/main.cpp"    (Get-Template "main.cpp.tpl"       @{ NAME = $name })
-    Set-Content "CMakeLists.txt"  (Get-Template "CMakeLists.txt.tpl" @{ NAME = $name })
+    # Validar nombre del proyecto
+    if ($projectName -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+        Write-Fail "nombre de proyecto invalido: '$projectName'"
+        return
+    }
 
-    Write-Row "dirs"    "src/  include/  build/"
-    Write-Row "cmake"   "CMakeLists.txt"
-    Write-Row "entry"   "src/main.cpp"
+# Resolver archivo YAML de arquitectura
+    if (-not $archName) {
+        Write-Fail "debes especificar una arquitectura"
+        Show-Architectures
+        return
+    }
+    $yamlPath = Join-Path $ARCHTEMPLATES "$archName.yaml"
+
+    # Parsear YAML antes de crear nada (falla limpio si no existe)
+    $tree = Parse-ArchYaml $yamlPath
+    if (-not $tree) { return }
+
+    # Crear directorio raiz del proyecto y entrar
+    $null = New-Item -ItemType Directory -Path $projectName -ErrorAction Stop
+    Set-Location $projectName
+
+    Write-Row "arch" "$archName  ($yamlPath)"
+    Write-Host ""
+
+    # Construir estructura desde el arbol YAML
+    Build-TreeFromYaml $tree (Get-Location).Path $projectName
+
+    Write-Host ""
+
+    # Escribir metadata
+    Write-CppxMeta $projectName $archName
 
     code . 2>$null
 }
@@ -198,11 +383,11 @@ function Build {
 
     $compiler = Find-Compiler
     if ($compiler -eq "UNKNOWN") {
-        Write-Fail "no se encontró ningún compilador (cl, g++, clang++)"
+        Write-Fail "no se encontro ningun compilador (cl, g++, clang++)"
         return $false
     }
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
-        Write-Fail "cmake no está instalado o no está en el PATH"
+        Write-Fail "cmake no esta instalado o no esta en el PATH" 
         return $false
     }
 
@@ -276,7 +461,7 @@ function Dist {
     $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Where-Object { $_.Name -notlike "CompilerId*" } | Select-Object -First 1
 
     if (-not $exe) {
-        Write-Fail "no se encontró .exe tras compilar"
+        Write-Fail "no se encontro .exe tras compilar"
         return
     }
 

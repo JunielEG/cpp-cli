@@ -1,0 +1,15 @@
+root:
+  - src:
+      - domain:
+        - entities:
+      - use_cases:
+      - interfaces:
+      - infrastructure:
+      - main.cpp
+  - include:
+      - domain:
+      - use_cases:
+      - interfaces:
+      - infrastructure:
+  - build:
+  - CMakeLists.txt

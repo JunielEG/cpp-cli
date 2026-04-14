@@ -1,0 +1,6 @@
+root:
+  - src:
+      - main.cpp
+  - include:
+  - build:
+  - CMakeLists.txt
