@@ -1,0 +1,10 @@
+root:
+  - src:
+      - example_module1:
+      - example_module2:
+      - main.cpp
+  - include:
+      - example_module1:
+      - example_module2:
+  - build:
+  - CMakeLists.txt
