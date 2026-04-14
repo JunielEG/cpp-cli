@@ -1,0 +1,14 @@
+root:
+  - src:
+      - presentation:
+      - application:
+      - domain:
+      - infrastructure:
+      - main.cpp
+  - include:
+      - presentation:
+      - application:
+      - domain:
+      - infrastructure:
+  - build:
+  - CMakeLists.txt

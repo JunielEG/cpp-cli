@@ -1,0 +1,12 @@
+root:
+  - src:
+      - model:
+      - view:
+      - controller:
+      - main.cpp
+  - include:
+      - model:
+      - view:
+      - controller:
+  - build:
+  - CMakeLists.txt
