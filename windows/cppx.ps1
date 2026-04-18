@@ -8,7 +8,7 @@ $FILETEMPLATES = Join-Path $PSScriptRoot "templates/files"
 $ARCHTEMPLATES = Join-Path $PSScriptRoot "templates/architectures"
 
 $COMMANDS = @(
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>";       Desc = "crea proyecto con CMakeLists.txt" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>";        Desc = "crea proyecto con CMakeLists.txt" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <name>/<arch>"; Desc = "crea proyecto con arquitectura (ej: mvc, small)" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <name>";          Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <name>";         Desc = "agrega modulo con su propio subdirectorio" },
@@ -20,6 +20,8 @@ $COMMANDS = @(
 $KNOWN_FILES = @{
     "main.cpp"       = "main.cpp.tpl"
     "CMakeLists.txt" = "CMakeLists.txt.tpl"
+    # ".gitignore" = ".gitignore.tpl"
+    # "README.md" = "README.md.tpl"
 }
 
 $ARCHITECTURES = @(
@@ -53,7 +55,7 @@ function Write-Fail([string]$msg) {
     Write-Host ""
 }
 
-# -- Helpers ------------------------------------------------------------------
+# -- Guides ------------------------------------------------------------------
 
 function Show-Help {
     Write-Header "cppx"
@@ -81,6 +83,8 @@ function Show-Architectures {
     Write-Host "  uso: cppx new project <nombre>/<arch>" -ForegroundColor Yellow
     Write-Host ""
 }
+
+# -- Helpers ------------------------------------------------------------------
 
 function Test-Name([string]$n) {
     if (-not $n) { return $false }
@@ -146,21 +150,16 @@ function Parse-ArchYaml([string]$yamlPath) {
     }
 
     $lines = Get-Content $yamlPath
-
-    # Construye una lista plana de tokens { indent; name; isDir }
     $tokens = [System.Collections.Generic.List[hashtable]]::new()
 
     foreach ($line in $lines) {
-        # Ignorar lineas vacias y comentarios
         if ($line -match '^\s*$' -or $line -match '^\s*#') { continue }
 
-        # Solo procesar lineas que empiecen con "- "
         if ($line -notmatch '^(\s*)-\s+(.+)$') { continue }
 
         $indent  = $Matches[1].Length
         $content = $Matches[2].Trim()
 
-        # "key:" -> directorio   |   "file.ext" -> archivo conocido
         if ($content -match '^([A-Za-z0-9_./-]+):$') {
             $tokens.Add(@{ indent = $indent; name = $Matches[1]; isDir = $true })
         } elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
@@ -168,7 +167,6 @@ function Parse-ArchYaml([string]$yamlPath) {
         }
     }
 
-    # Convierte la lista plana en arbol usando una pila
     $root     = @{ name = "root"; isDir = $true; children = [System.Collections.Generic.List[hashtable]]::new() }
     $stack    = [System.Collections.Generic.Stack[hashtable]]::new()
     $indStack = [System.Collections.Generic.Stack[int]]::new()
@@ -177,7 +175,6 @@ function Parse-ArchYaml([string]$yamlPath) {
     $indStack.Push(-1)
 
     foreach ($tok in $tokens) {
-        # Sube en la pila hasta encontrar el padre correcto
         while ($indStack.Count -gt 1 -and $tok.indent -le $indStack.Peek()) {
             $null = $stack.Pop()
             $null = $indStack.Pop()
@@ -200,7 +197,6 @@ function Parse-ArchYaml([string]$yamlPath) {
     return $root
 }
 
-# Recorre el arbol y crea la estructura en disco
 function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
     foreach ($child in $node.children) {
         $childPath = Join-Path $basePath $child.name
@@ -225,14 +221,12 @@ function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
     }
 }
 
-# Escribe el archivo .cppx en el directorio actual
 function Write-CppxMeta([string]$projectName, [string]$arch) {
     $content = "NAME=$projectName`nARCH=$arch"
     Set-Content ".cppx" $content
     Write-Row "meta" ".cppx  (NAME=$projectName, ARCH=$arch)"
 }
 
-# Lee el archivo .cppx del proyecto actual (si existe)
 function Read-CppxMeta {
     if (-not (Test-Path ".cppx")) { return @{} }
     $meta = @{}
@@ -348,7 +342,6 @@ function New-Project {
         return
     }
 
-# Resolver archivo YAML de arquitectura
     if (-not $archName) {
         Write-Fail "debes especificar una arquitectura"
         Show-Architectures
@@ -356,23 +349,19 @@ function New-Project {
     }
     $yamlPath = Join-Path $ARCHTEMPLATES "$archName.yaml"
 
-    # Parsear YAML antes de crear nada (falla limpio si no existe)
     $tree = Parse-ArchYaml $yamlPath
     if (-not $tree) { return }
 
-    # Crear directorio raiz del proyecto y entrar
     $null = New-Item -ItemType Directory -Path $projectName -ErrorAction Stop
     Set-Location $projectName
 
     Write-Row "arch" "$archName  ($yamlPath)"
     Write-Host ""
 
-    # Construir estructura desde el arbol YAML
     Build-TreeFromYaml $tree (Get-Location).Path $projectName
 
     Write-Host ""
 
-    # Escribir metadata
     Write-CppxMeta $projectName $archName
 
     code . 2>$null
