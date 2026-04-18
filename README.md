@@ -60,6 +60,8 @@ cppx
 | `cppx build` | Configures and compiles the project using CMake |
 | `cppx run` | Builds and runs the compiled executable |
 | `cppx dist` | Builds in Release mode and packages the `.exe` + DLLs into `dist/<project>/` |
+| `cppx git` | Creates an repository with a generic `.gitignore` and a simple `README.md` |
+| `cppx credit` | Shows the tool's name and the repo to get it [C++ Scaffolding Tool](https://github.com/JunielEG/cpp-cli.git) |
 
 ---
 
