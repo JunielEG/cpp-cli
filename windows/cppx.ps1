@@ -46,7 +46,7 @@ function Write-Header([string]$title) {
 }
 
 function Write-Row([string]$label, [string]$msg, [string]$status = "ok") {
-    $icon  = switch ($status) { "ok" { "+" } "warn" { "!" } "skip" { "-" } "none" { "." } default { " " } }
+    $icon  = switch ($status) { "ok" { "+" } "warn" { "warn" } "skip" { "-" } "none" { "." } default { " " } }
     $color = switch ($status) { "ok" { "Green" } "warn" { "Yellow" } default { "DarkGray" } }
     Write-Host ("  {0,-10}" -f $label) -ForegroundColor DarkGray -NoNewline
     Write-Host "$icon  " -ForegroundColor $color -NoNewline
@@ -89,6 +89,20 @@ function Show-Architectures {
 }
 
 # -- Helpers ------------------------------------------------------------------
+
+# -- Y/n method --
+# Mandar una pregunta y recibir un bool de si le acepta
+# sin implementacion por el momento
+#
+# implementacion:
+# if (-not (Confirm "Aquí va la advertencia, ponga lo que quiera")) { return }
+function Confirm([string]$msg) {
+    Write-Host ""
+    Write-Row "" $msg "warn"
+    $reply = Read-Host "  Desea continuar? [Y/n]"
+    Write-Host ""
+    return ($reply -match '^[Yy]')
+}
 
 function Test-Name([string]$n) {
     if (-not $n) { return $false }
