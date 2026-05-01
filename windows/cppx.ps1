@@ -59,6 +59,11 @@ function Write-Fail([string]$msg) {
     Write-Host ""
 }
 
+function Show-Advice {
+    Write-Host ""
+    Write-Row "tip" "Usa 'cppx help' para ver los comandos disponibles" "none"
+    Write-Host ""
+}
 # -- Guides ------------------------------------------------------------------
 
 function Show-Help {
@@ -592,7 +597,7 @@ switch ($cmd1) {
             "class"   { New-Class }
             "module"  { New-Module }
             "project" { New-Project }
-            default   { Show-Help }
+            default   { Show-Advice }
         }
     }
     "build"  { Build | Out-Null }
@@ -600,5 +605,6 @@ switch ($cmd1) {
     "dist"   { Dist }
     "git"    { Init-Git }
     "credit" { Show-Credit }
-    default  { Show-Help }
+    "help"   { Show-Help }
+    default  { Show-Advice }
 }

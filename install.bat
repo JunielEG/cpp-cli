@@ -48,6 +48,10 @@ if "%COPY_OK%"=="1" (
 rem -- limpiar clone temporal --------------------------------------------------
 if exist "%TEMP%\%TOOL_NAME%-install" rmdir /s /q "%TEMP%\%TOOL_NAME%-install"
 
+rem -- autocompletar en PowerShell $PROFILE -----------------------------------
+powershell -ExecutionPolicy Bypass -File "%SOURCE_DIR%\windows\setup-profile.ps1" -InstallDir "%INSTALL_DIR%"
+echo   profile   ^ function + autocomplete added
+
 rem -- PATH --------------------------------------------------------------------
 for /f "skip=2 tokens=3*" %%A in (
     'reg query "HKCU\Environment" /v PATH 2^>nul'
