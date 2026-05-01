@@ -2,12 +2,13 @@ param($InstallDir)
 
 $profileFile = $PROFILE
 $profileDir  = Split-Path $profileFile
+$toolCmd = "cppx"
 
 if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir | Out-Null }
 
 $block = @'
 
-# cppx [start]
+# $toolCmd [start]
 function cppx { & "$InstallDir\cppx.ps1" @args }
 Register-ArgumentCompleter -CommandName cppx -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
@@ -30,21 +31,21 @@ Register-ArgumentCompleter -CommandName cppx -ScriptBlock {
         }
     }
 }
-# cppx [end]
+# $toolCmd [end]
 '@
 
 $block = $block.Replace('$InstallDir', $InstallDir)
+$block = $block.Replace('$toolCmd',    $toolCmd)
 
 if (Test-Path $profileFile) {
     $content = Get-Content $profileFile -Raw
 
-    if ($content -match '(?s)# cppx \[start\].*?# cppx \[end\]') {
-        # Reemplazar bloque existente
-        $pattern = '(?s)# cppx \[start\].*?# cppx \[end\]'
-        $replacement = $block.Trim()
-        $content = [regex]::Replace($content, $pattern, { $replacement })
-        Set-Content -Path $profileFile -Value $content
-        Write-Host "  profile   ^  autocomplete updated"
+if ($content -match "(?s)# $toolCmd \[start\].*?# $toolCmd \[end\]") {
+    $pattern = "(?s)# $toolCmd \[start\].*?# $toolCmd \[end\]"
+    $replacement = $block.Trim()
+    $content = [regex]::Replace($content, $pattern, { $replacement })
+    Set-Content -Path $profileFile -Value $content
+    Write-Host "  profile   ^  autocomplete updated"
     } else {
         # No existe, agregar al final
         Add-Content -Path $profileFile -Value $block

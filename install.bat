@@ -4,6 +4,8 @@ setlocal
 set "TOOL_NAME=cpp-cli"
 set "REPO_URL=https://github.com/JunielEG/cpp-cli.git"
 set "INSTALL_DIR=%USERPROFILE%\ScaffoldingTools\%TOOL_NAME%"
+set "CLOSE_LOCAL=false"
+if /i "%~1"=="closeLocal" set "CLOSE_LOCAL=true"
 
 echo.
 echo   %TOOL_NAME%  installer
@@ -48,7 +50,7 @@ if "%COPY_OK%"=="1" (
 rem -- limpiar clone temporal --------------------------------------------------
 if exist "%TEMP%\%TOOL_NAME%-install" rmdir /s /q "%TEMP%\%TOOL_NAME%-install"
 
-rem -- autocompletar en PowerShell $PROFILE -----------------------------------
+rem -- crear autocompletar en PowerShell $PROFILE ------------------------------
 powershell -ExecutionPolicy Bypass -File "%SOURCE_DIR%\windows\setup-profile.ps1" -InstallDir "%INSTALL_DIR%"
 echo   profile   ^ function + autocomplete added
 
@@ -67,9 +69,10 @@ if errorlevel 1 (
 
 echo.
 if "%COPY_OK%"=="1" (
-    echo   done.  run:  cppx
+    echo   done.  run:  cppx help
 ) else (
     echo   done. advertencias.  revisa los warns arriba.
 )
 echo.
+if "%CLOSE_LOCAL%"=="false" ( pause )
 endlocal
