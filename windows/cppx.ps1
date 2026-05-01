@@ -458,18 +458,22 @@ function Run {
         return
     }
 
-    Write-Host ""
-    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  $projectName" -ForegroundColor Green
-    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-    Write-Host ""
+    $exeFullPath = (Resolve-Path $exe).Path
 
-    & (Resolve-Path $exe)
+    $script = @"
+Write-Host ''
+Write-Host '  $('-' * 40) -ForegroundColor DarkGray
+Write-Host '  $projectName' -ForegroundColor Green
+Write-Host '  $('-' * 40) -ForegroundColor DarkGray
+Write-Host ''
+& '$exeFullPath'
+Write-Host ''
+Write-Host '  $('-' * 40) -ForegroundColor DarkGray
+Write-Host '  exit' -ForegroundColor DarkGray
+Write-Host ''
+"@
 
-    Write-Host ""
-    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-    Write-Host "  exit" -ForegroundColor DarkGray
-    Write-Host ""
+    Start-Process powershell -ArgumentList "-Command", $script
 }
 
 function Dist {
@@ -485,7 +489,10 @@ function Dist {
         Write-Fail "no se pudo leer el nombre del proyecto en CMakeLists.txt"
         return
     }
+    
     Write-Row "mode" "release"
+    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
+    Write-Host ""
 
     cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
     cmake --build build/release --config Release
@@ -501,7 +508,11 @@ function Dist {
     $null = New-Item -ItemType Directory -Force -Path $distDir
 
     Copy-Item $exe.FullName "$distDir/$($exe.Name)" -Force
+    Write-Host ""
+    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
     Write-Row "exe" $exe.Name
+    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
+    Write-Host ""
 
     Get-ChildItem $exe.DirectoryName -Filter "*.dll" | ForEach-Object {
         Copy-Item $_.FullName "$distDir/$($_.Name)" -Force
