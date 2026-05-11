@@ -28,9 +28,9 @@ if exist "%~dp0windows\cppx.bat" (
 echo   install   %INSTALL_DIR%
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
-xcopy /E /I /Y "%SOURCE_DIR%\templates"        "%INSTALL_DIR%\templates\" > nul
-copy  /Y        "%SOURCE_DIR%\windows\cppx.bat" "%INSTALL_DIR%\cppx.bat"  > nul
-copy  /Y        "%SOURCE_DIR%\windows\cppx.ps1" "%INSTALL_DIR%\cppx.ps1"  > nul
+xcopy /E /I /Y  "%SOURCE_DIR%\templates"        "%INSTALL_DIR%\templates\" > nul
+copy  /Y        "%SOURCE_DIR%\windows\cppx.bat" "%INSTALL_DIR%\cppx.bat"   > nul
+copy  /Y        "%SOURCE_DIR%\windows\cppx.ps1" "%INSTALL_DIR%\cppx.ps1"   > nul
 
 echo   files     ^ cppx.bat, cppx.ps1
 

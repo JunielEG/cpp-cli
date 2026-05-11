@@ -19,6 +19,7 @@
 > You only need the install script — cloning the repository is just the easiest way to get it.
 
 **1. Clone the repository:**
+
 ```bash
 git clone https://github.com/JunielEG/cpp-cli.git
 cd cpp-cli
@@ -27,23 +28,27 @@ cd cpp-cli
 **2. Run the install script for your platform:**
 
 **Windows** — run `Install.bat` as Administrator:
+
 ```bat
 Install.bat
 ```
 
 **Linux / macOS** — run `install.sh`:
+
 ```bash
 chmod +x install.sh
 ./install.sh
 ```
 
 Both scripts will:
+
 - Copy the tool files to `~/ScaffoldingTools/cpp-cli/`
 - Add `cppx` to your PATH
 
 On Unix, the PATH entry is added to the first profile file found: `.zshrc`, `.bashrc`, `.bash_profile`, or `.profile`.
 
 **3. Open a new terminal** and verify:
+
 ```bash
 cppx
 ```
@@ -52,16 +57,16 @@ cppx
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `cppx new project <name>/<arch>` | Creates a new C++ project with the specified architecture |
-| `cppx new class <name>` | Adds a `.h`/`.cpp` pair to the current project |
-| `cppx new module <name>` | Adds a module with its own subdirectory inside `src/` and `include/` |
-| `cppx build` | Configures and compiles the project using CMake |
-| `cppx run` | Builds and runs the compiled executable |
-| `cppx dist` | Builds in Release mode and packages the `.exe` + DLLs into `dist/<project>/` |
-| `cppx git` | Creates an repository with a generic `.gitignore` and a simple `README.md` |
-| `cppx credit` | Shows the tool's name and the repo to get it [C++ Scaffolding Tool](https://github.com/JunielEG/cpp-cli.git) |
+| Command                          | Description                                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `cppx new project <name>/<arch>` | Creates a new C++ project with the specified architecture                                                    |
+| `cppx new class <name>`          | Adds a `.h`/`.cpp` pair to the current project                                                               |
+| `cppx new module <name>`         | Adds a module with its own subdirectory inside `src/` and `include/`                                         |
+| `cppx build`                     | Configures and compiles the project using CMake                                                              |
+| `cppx run`                       | Builds and runs the compiled executable                                                                      |
+| `cppx dist`                      | Builds in Release mode and packages the `.exe` + DLLs into `dist/<project>/`                                 |
+| `cppx git`                       | Creates an repository with a generic `.gitignore` and a simple `README.md`                                   |
+| `cppx credit`                    | Shows the tool's name and the repo to get it [C++ Scaffolding Tool](https://github.com/JunielEG/cpp-cli.git) |
 
 ---
 
@@ -69,13 +74,13 @@ cppx
 
 Every project requires an architecture. Run `cppx new project` without arguments to see the full list. Available architectures:
 
-| Name | Description | Structure |
-|---|---|---|
-| `small` | src / include | Minimal layout for small projects |
-| `mvc` | Model - View - Controller | Separates data, presentation, and logic |
-| `features` | Feature-based | One folder per feature, self-contained |
-| `layered` | Por capas | Horizontal layers (presentation, domain, data) |
-| `cleanarc` | Clean Architecture | Entities, use cases, interfaces, infrastructure |
+| Name       | Description               | Structure                                       |
+| ---------- | ------------------------- | ----------------------------------------------- |
+| `small`    | src / include             | Minimal layout for small projects               |
+| `mvc`      | Model - View - Controller | Separates data, presentation, and logic         |
+| `features` | Feature-based             | One folder per feature, self-contained          |
+| `layered`  | Por capas                 | Horizontal layers (presentation, domain, data)  |
+| `cleanarc` | Clean Architecture        | Entities, use cases, interfaces, infrastructure |
 
 ---
 
@@ -163,7 +168,7 @@ cppx run
 
 ## Installed file location
 
-| Platform | Path |
-|---|---|
-| Windows | `%USERPROFILE%\ScaffoldingTools\cpp-cli\` |
-| Linux / macOS | `~/ScaffoldingTools/cpp-cli/` |
+| Platform      | Path                                      |
+| ------------- | ----------------------------------------- |
+| Windows       | `%USERPROFILE%\ScaffoldingTools\cpp-cli\` |
+| Linux / macOS | `~/ScaffoldingTools/cpp-cli/`             |
