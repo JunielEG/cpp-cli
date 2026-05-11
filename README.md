@@ -68,6 +68,8 @@ cppx
 | `cppx git`                       | Creates an repository with a generic `.gitignore` and a simple `README.md`                                   |
 | `cppx credit`                    | Shows the tool's name and the repo to get it [C++ Scaffolding Tool](https://github.com/JunielEG/cpp-cli.git) |
 
+> `new class` and `new module` will validate that the name follows PascalCase. If it doesn't, you'll be prompted to automatically convert it (e.g. `my_renderer` → `MyRenderer`).
+
 ---
 
 ## Architectures
@@ -109,6 +111,8 @@ myapp/
 - `main.cpp` includes a ready-to-compile entry point.
 - `CMakeLists.txt` is pre-configured with C++17, `file(GLOB_RECURSE)` over `src/`, and includes for both `include/` and `src/`.
 - `.cppx` stores project metadata (name and architecture). It is used by other commands to stay consistent with the project layout.
+
+> The project name must not contain any of the following characters: `/ \ : * ? " < > |`
 
 ### `cppx new class <name>`
 

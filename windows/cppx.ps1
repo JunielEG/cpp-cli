@@ -10,15 +10,15 @@ $ARCHTEMPLATES = Join-Path $PSScriptRoot "templates/architectures"
 $REPO_URL = "https://github.com/JunielEG/cpp-cli.git"
 
 $COMMANDS = @(
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>";        Desc = "crea proyecto con CMakeLists.txt" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>"; Desc = "crea proyecto con CMakeLists.txt" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>/<arch>"; Desc = "crea proyecto con arquitectura (ej: mvc, small)" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <n>";          Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <n>";         Desc = "agrega modulo con su propio subdirectorio" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx build";                  Desc = "configura y compila con CMake" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx run";                    Desc = "compila y ejecuta el binario resultante" },
-    [PSCustomObject]@{ Group = "build";    Cmd = "cppx dist";                   Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" },
-    [PSCustomObject]@{ Group = "other";    Cmd = "cppx git";                    Desc = "inicia repositorio git y genera .gitignore / README.md" },
-    [PSCustomObject]@{ Group = "other";    Cmd = "cppx credit";                 Desc = "muestra la URL del repositorio de cppx" }
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <n>"; Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <n>"; Desc = "agrega modulo con su propio subdirectorio" },
+    [PSCustomObject]@{ Group = "build"; Cmd = "cppx build"; Desc = "configura y compila con CMake" },
+    [PSCustomObject]@{ Group = "build"; Cmd = "cppx run"; Desc = "compila y ejecuta el binario resultante" },
+    [PSCustomObject]@{ Group = "build"; Cmd = "cppx dist"; Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" },
+    [PSCustomObject]@{ Group = "other"; Cmd = "cppx git"; Desc = "inicia repositorio git y genera .gitignore / README.md" },
+    [PSCustomObject]@{ Group = "other"; Cmd = "cppx credit"; Desc = "muestra la URL del repositorio de cppx" }
 )
 
 $KNOWN_FILES = @{
@@ -29,10 +29,10 @@ $KNOWN_FILES = @{
 }
 
 $ARCHITECTURES = @(
-    [PSCustomObject]@{ Name = "small";    Desc = "Estructura simple: headers en include, codigo en src." },
-    [PSCustomObject]@{ Name = "mvc";      Desc = "Separa datos, interfaz y control de flujo." },
+    [PSCustomObject]@{ Name = "small"; Desc = "Estructura simple: headers en include, codigo en src." },
+    [PSCustomObject]@{ Name = "mvc"; Desc = "Separa datos, interfaz y control de flujo." },
     [PSCustomObject]@{ Name = "features"; Desc = "Organiza por funcionalidad, cada modulo es autonomo." },
-    [PSCustomObject]@{ Name = "layered";  Desc = "Divide en capas: UI, logica, dominio, infraestructura." },
+    [PSCustomObject]@{ Name = "layered"; Desc = "Divide en capas: UI, logica, dominio, infraestructura." },
     [PSCustomObject]@{ Name = "cleanarc"; Desc = "Capas desacopladas, dominio independiente del resto." }
 )
 
@@ -46,7 +46,7 @@ function Write-Header([string]$title) {
 }
 
 function Write-Row([string]$label, [string]$msg, [string]$status = "ok") {
-    $icon  = switch ($status) { "ok" { "+" } "warn" { "warn" } "skip" { "-" } "none" { "." } default { " " } }
+    $icon = switch ($status) { "ok" { "+" } "warn" { "warn" } "skip" { "-" } "none" { "." } default { " " } }
     $color = switch ($status) { "ok" { "Green" } "warn" { "Yellow" } default { "DarkGray" } }
     Write-Host ("  {0,-10}" -f $label) -ForegroundColor DarkGray -NoNewline
     Write-Host "$icon  " -ForegroundColor $color -NoNewline
@@ -101,18 +101,21 @@ function Show-Architectures {
 #
 # implementacion:
 # if (-not (Confirm "Aquí va la advertencia, ponga lo que quiera")) { return }
-function Confirm([string]$msg) {
+function Confirm([string]$msg, [string]$qst) {
     Write-Host ""
     Write-Row "" $msg "warn"
-    $reply = Read-Host "  Desea continuar? [Y/n]"
+    $reply = Read-Host "  " $qst " [Y/n]"
     Write-Host ""
     return ($reply -match '^[Yy]')
 }
 
 function Test-Name([string]$n) {
-    if (-not $n) { return $false }
-    if ($n -notmatch '^[A-Za-z_][A-Za-z0-9_/]*$') {
-        Write-Fail "nombre invalido: '$n'"
+    if (-not $n) {
+        Write-Fail "el nombre no puede estar vacio"
+        return $false
+    }
+    if ($n -match '[/\\:*?"<>|]') {
+        Write-Fail "nombre invalido '$n'  -  caracteres no permitidos: / \ : * ? `" < > |"
         return $false
     }
     return $true
@@ -120,14 +123,24 @@ function Test-Name([string]$n) {
 
 function Request-Name {
     while (-not (Test-Name $name)) {
-        $script:name = Read-Host "  name"
+        $script:name = Read-Host "nombre: "
     }
+}
+
+function Test-PascalCase([string]$n) {
+    return $n -cmatch '^[A-Z][a-zA-Z0-9]*$'
+}
+
+function ConvertTo-PascalCase([string]$n) {
+    if (-not $n) { return $n }
+    $result = ($n -replace '[-_](.)', { $args[0].Groups[1].Value.ToUpper() })
+    return ($result.Substring(0, 1).ToUpper() + $result.Substring(1))
 }
 
 function Split-SlashPair([string]$raw) {
     $parts = $raw -split "/"
-    $leaf  = $parts[-1]
-    $head  = if ($parts.Length -gt 1) { $parts[0..($parts.Length - 2)] } else { @() }
+    $leaf = $parts[-1]
+    $head = if ($parts.Length -gt 1) { $parts[0..($parts.Length - 2)] } else { @() }
     return @{
         # para class / module: ultimo segmento es la clase, los anteriores forman el namespace (::)
         class     = $leaf
@@ -136,8 +149,8 @@ function Split-SlashPair([string]$raw) {
         project   = $parts[0]
         arch      = if ($parts.Length -eq 2) { $parts[1] } else { "" }
         # acceso generico
-        head      = ($head -join "/")
         leaf      = $leaf
+        head      = ($head -join "/")
     }
 }
 
@@ -163,8 +176,8 @@ function Get-Template([string]$file, [hashtable]$replacements) {
 }
 
 function Find-Compiler {
-    if (Get-Command cl      -ErrorAction SilentlyContinue) { return "MSVC"  }
-    if (Get-Command g++     -ErrorAction SilentlyContinue) { return "GCC"   }
+    if (Get-Command cl -ErrorAction SilentlyContinue) { return "MSVC" }
+    if (Get-Command g++ -ErrorAction SilentlyContinue) { return "GCC" }
     if (Get-Command clang++ -ErrorAction SilentlyContinue) { return "CLANG" }
     return "UNKNOWN"
 }
@@ -176,7 +189,7 @@ function Find-Compiler {
 #   - Indentacion con espacios (2 o 4 por nivel)
 # Devuelve un arbol de objetos @{ name; type; children }
 
-function Parse-ArchYaml([string]$yamlPath) {
+function Import-ArchYaml([string]$yamlPath) {
     if (-not (Test-Path $yamlPath)) {
         Write-Fail "arquitectura no encontrada: $yamlPath"
         return $null
@@ -190,18 +203,19 @@ function Parse-ArchYaml([string]$yamlPath) {
 
         if ($line -notmatch '^(\s*)-\s+(.+)$') { continue }
 
-        $indent  = $Matches[1].Length
+        $indent = $Matches[1].Length
         $content = $Matches[2].Trim()
 
         if ($content -match '^([A-Za-z0-9_./-]+):$') {
             $tokens.Add(@{ indent = $indent; name = $Matches[1]; isDir = $true })
-        } elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
-            $tokens.Add(@{ indent = $indent; name = $content;    isDir = $false })
+        }
+        elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
+            $tokens.Add(@{ indent = $indent; name = $content; isDir = $false })
         }
     }
 
-    $root     = @{ name = "root"; isDir = $true; children = [System.Collections.Generic.List[hashtable]]::new() }
-    $stack    = [System.Collections.Generic.Stack[hashtable]]::new()
+    $root = @{ name = "root"; isDir = $true; children = [System.Collections.Generic.List[hashtable]]::new() }
+    $stack = [System.Collections.Generic.Stack[hashtable]]::new()
     $indStack = [System.Collections.Generic.Stack[int]]::new()
 
     $stack.Push($root)
@@ -238,14 +252,16 @@ function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
             $null = New-Item -ItemType Directory -Force -Path $childPath
             Write-Row "dir" $childPath.Replace((Get-Location).Path + "\", "")
             Build-TreeFromYaml $child $childPath $projectName
-        } else {
+        }
+        else {
             # Archivo conocido -> genera desde template
             if ($KNOWN_FILES.ContainsKey($child.name)) {
                 $tplName = $KNOWN_FILES[$child.name]
                 $content = Get-Template $tplName @{ NAME = $projectName }
                 Set-Content $childPath $content
                 Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "")
-            } else {
+            }
+            else {
                 # Archivo desconocido -> crea vacio con advertencia
                 Set-Content $childPath ""
                 Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "") "warn"
@@ -274,10 +290,10 @@ function Read-CppxMeta {
     return $meta
 }
 
-function Require-CppxMeta {
+function Request-CppxMeta {
     $meta = Read-CppxMeta
     if ($meta.Count -eq 0) {
-        Write-Fail ".cppx no encontrado - ejecuta 'cppx new project' primero"
+        Write-Fail ".cppx no encontrado"
         return $null
     }
     if (-not $meta["NAME"]) {
@@ -291,18 +307,29 @@ function Require-CppxMeta {
 
 function New-Class {
     Request-Name
-    Write-Header "new class  ->  $name"
 
     $info = Split-SlashPair $name
     $class = $info.class
-    $ns    = $info.namespace
 
-    $nsOpen  = if ($ns) { "namespace $ns {" }    else { "" }
+    if (-not (Test-PascalCase $class)) {
+        $suggested = ConvertTo-PascalCase $class
+        if (Confirm "'$class' no sigue el formato PascalCase." "Transformar a '$suggested'?") {
+            $class = $suggested
+            $script:name = if ($info.head) { "$($info.head)/$class" } else { $class }
+            $info = Split-SlashPair $script:name
+        }
+    }
+
+    $ns = $info.namespace
+    
+    Write-Header "new class  ->  $name"
+
+    $nsOpen = if ($ns) { "namespace $ns {" } else { "" }
     $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
-    $dir     = if ($ns) { ($name -replace "/$class$", "") } else { "" }
+    $dir = if ($ns) { ($name -replace "/$class$", "") } else { "" }
 
     $includeDir = if ($dir) { "include/$dir" } else { "include" }
-    $srcDir     = if ($dir) { "src/$dir" }     else { "src" }
+    $srcDir = if ($dir) { "src/$dir" } else { "src" }
 
     $null = New-Item -ItemType Directory -Force -Path $includeDir
     $null = New-Item -ItemType Directory -Force -Path $srcDir
@@ -317,11 +344,11 @@ function New-Class {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    Set-Content "$includeDir/$class.h"   (Get-Template "class.h.tpl"   $repl)
-    Set-Content "$srcDir/$class.cpp"     (Get-Template "class.cpp.tpl" $repl)
+    Set-Content "$includeDir/$class.h" (Get-Template "class.h.tpl" $repl)
+    Set-Content "$srcDir/$class.cpp" (Get-Template "class.cpp.tpl" $repl)
 
-    Write-Row "header"  "$includeDir/$class.h"
-    Write-Row "source"  "$srcDir/$class.cpp"
+    Write-Row "header" "$includeDir/$class.h"
+    Write-Row "source" "$srcDir/$class.cpp"
     if ($ns) { Write-Row "namespace" $ns }
 
     $meta = Read-CppxMeta
@@ -332,18 +359,29 @@ function New-Class {
 
 function New-Module {
     Request-Name
+
+    $info = Split-SlashPair $name
+    $class = $info.class
+
+    if (-not (Test-PascalCase $class)) {
+        $suggested = ConvertTo-PascalCase $class
+        if (Confirm "'$class' no sigue el formato PascalCase." "Transformar a '$suggested'?") {
+            $class = $suggested
+            $script:name = if ($info.head) { "$($info.head)/$class" } else { $class }
+            $info = Split-SlashPair $script:name
+        }
+    }
+
+    $ns = ($name -replace "/", "::")
+    
     Write-Header "new module  ->  $name"
 
-    $info  = Split-SlashPair $name
-    $class = $info.class
-    $ns    = ($name -replace "/", "::")
-
     if ($ns -eq $class) { $ns = "" }
-    $nsOpen  = if ($ns) { "namespace $ns {" }    else { "" }
+    $nsOpen = if ($ns) { "namespace $ns {" }    else { "" }
     $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
 
-    $includeDir  = "include/$name"
-    $srcDir      = "src/$name"
+    $includeDir = "include/$name"
+    $srcDir = "src/$name"
 
     $null = New-Item -ItemType Directory -Force -Path $includeDir
     $null = New-Item -ItemType Directory -Force -Path $srcDir
@@ -356,11 +394,11 @@ function New-Module {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    Set-Content "$includeDir/$class.h"  (Get-Template "module.h.tpl"   $repl)
-    Set-Content "$srcDir/$class.cpp"    (Get-Template "module.cpp.tpl" $repl)
+    Set-Content "$includeDir/$class.h" (Get-Template "module.h.tpl" $repl)
+    Set-Content "$srcDir/$class.cpp" (Get-Template "module.cpp.tpl" $repl)
 
-    Write-Row "header"  "$includeDir/$class.h"
-    Write-Row "source"  "$srcDir/$class.cpp"
+    Write-Row "header" "$includeDir/$class.h"
+    Write-Row "source" "$srcDir/$class.cpp"
     if ($ns) { Write-Row "namespace" $ns }
 }
 
@@ -368,9 +406,9 @@ function New-Project {
     Request-Name
     Write-Header "new project  ->  $name"
 
-    $parsed      = Split-SlashPair $name
+    $parsed = Split-SlashPair $name
     $projectName = $parsed.project
-    $archName    = $parsed.arch
+    $archName = $parsed.arch
 
     if ($projectName -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
         Write-Fail "nombre de proyecto invalido: '$projectName'"
@@ -389,7 +427,7 @@ function New-Project {
     }
     $yamlPath = Join-Path $ARCHTEMPLATES "$archName.yaml"
 
-    $tree = Parse-ArchYaml $yamlPath
+    $tree = Import-ArchYaml $yamlPath
     if (-not $tree) { return }
 
     $null = New-Item -ItemType Directory -Path $projectName -ErrorAction Stop
@@ -411,7 +449,7 @@ function Build {
     Write-Header "build"
 
     if (-not (Test-CMake)) { return $false }
-    $meta = Require-CppxMeta
+    $meta = Request-CppxMeta
     if (-not $meta) { return $false }
 
     Write-Row "project" $meta["NAME"]
@@ -483,14 +521,15 @@ Write-Host ''
 
 function Dist {
     if (-not (Test-CMake)) { return }
-    $meta = Require-CppxMeta
+    $meta = Request-CppxMeta
     if (-not $meta) { return }
     Write-Header "dist"
 
     $cmakeContent = Get-Content "CMakeLists.txt" -Raw
     if ($cmakeContent -match 'project\(\s*(\w+)') {
         $projectName = $Matches[1]
-    } else {
+    }
+    else {
         Write-Fail "no se pudo leer el nombre del proyecto en CMakeLists.txt"
         return
     }
@@ -535,10 +574,10 @@ function Show-Credit {
     Write-Host ""
 }
 
-function Init-Git {
+function Initialize-Git {
     Write-Header "git init"
 
-    $meta = Require-CppxMeta
+    $meta = Request-CppxMeta
     if (-not $meta) { return }
     $projectName = $meta["NAME"]
 
@@ -575,7 +614,8 @@ function Init-Git {
         git remote add origin $repoUrl 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Row "remote" $repoUrl "ok"
-        } else {
+        }
+        else {
             Write-Row "remote" "no se pudo agregar el remote" "warn"
             $repoUrl = ""
         }
@@ -594,17 +634,17 @@ function Init-Git {
 switch ($cmd1) {
     "new" {
         switch ($cmd2) {
-            "class"   { New-Class }
-            "module"  { New-Module }
+            "class" { New-Class }
+            "module" { New-Module }
             "project" { New-Project }
-            default   { Show-Advice }
+            default { Show-Advice }
         }
     }
-    "build"  { Build | Out-Null }
-    "run"    { Run }
-    "dist"   { Dist }
-    "git"    { Init-Git }
+    "build" { Build | Out-Null }
+    "run" { Run }
+    "dist" { Dist }
+    "git" { Initialize-Git }
     "credit" { Show-Credit }
-    "help"   { Show-Help }
-    default  { Show-Advice }
+    "help" { Show-Help }
+    default { Show-Advice }
 }
