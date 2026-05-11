@@ -46,14 +46,12 @@ if (Test-Path $profileFile) {
         $content = [regex]::Replace($content, $pattern, { $replacement })
         Set-Content -Path $profileFile -Value $content
         Write-Host "  profile   ^  autocomplete updated"
-    }
-    else {
+    } else {
         # No existe, agregar al final
         Add-Content -Path $profileFile -Value $block
         Write-Host "  profile   ^  autocomplete added"
     }
-}
-else {
+} else {
     Set-Content -Path $profileFile -Value $block
     Write-Host "  profile   ^  autocomplete added"
 }

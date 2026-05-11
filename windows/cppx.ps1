@@ -208,8 +208,7 @@ function Import-ArchYaml([string]$yamlPath) {
 
         if ($content -match '^([A-Za-z0-9_./-]+):$') {
             $tokens.Add(@{ indent = $indent; name = $Matches[1]; isDir = $true })
-        }
-        elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
+        } elseif ($content -match '^([A-Za-z0-9_./-]+)$') {
             $tokens.Add(@{ indent = $indent; name = $content; isDir = $false })
         }
     }
@@ -252,16 +251,14 @@ function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
             $null = New-Item -ItemType Directory -Force -Path $childPath
             Write-Row "dir" $childPath.Replace((Get-Location).Path + "\", "")
             Build-TreeFromYaml $child $childPath $projectName
-        }
-        else {
+        } else {
             # Archivo conocido -> genera desde template
             if ($KNOWN_FILES.ContainsKey($child.name)) {
                 $tplName = $KNOWN_FILES[$child.name]
                 $content = Get-Template $tplName @{ NAME = $projectName }
                 Set-Content $childPath $content
                 Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "")
-            }
-            else {
+            } else {
                 # Archivo desconocido -> crea vacio con advertencia
                 Set-Content $childPath ""
                 Write-Row "file" $childPath.Replace((Get-Location).Path + "\", "") "warn"
@@ -528,8 +525,7 @@ function Dist {
     $cmakeContent = Get-Content "CMakeLists.txt" -Raw
     if ($cmakeContent -match 'project\(\s*(\w+)') {
         $projectName = $Matches[1]
-    }
-    else {
+    } else {
         Write-Fail "no se pudo leer el nombre del proyecto en CMakeLists.txt"
         return
     }
@@ -614,8 +610,7 @@ function Initialize-Git {
         git remote add origin $repoUrl 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Row "remote" $repoUrl "ok"
-        }
-        else {
+        } else {
             Write-Row "remote" "no se pudo agregar el remote" "warn"
             $repoUrl = ""
         }
