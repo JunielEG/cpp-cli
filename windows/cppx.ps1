@@ -38,19 +38,33 @@ $ARCHITECTURES = @(
 
 # -- UI helpers ---------------------------------------------------------------
 
-function Write-Header([string]$title) {
+function Write-Header([string]$rootName, [string]$command, [string]$flags = "", [string]$extra = "") {
+    $indent = "  "
+    $arrow = " ->"
+    $minArrowCol = 30
+    $prefix = "$indent$rootName"
+    $padding = [Math]::Max($minArrowCol - $prefix.Length, 1)
+    $right = ($(@($command, $flags, $extra) | Where-Object { $_ }) -join "  ")
+    $line = "$prefix$(' ' * $padding)$arrow  $right"
     Write-Host ""
-    Write-Host "  $title" -ForegroundColor Cyan
-    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
+    Write-Host $line -ForegroundColor Cyan
+    Write-Host "  $('-' * ($line.Length - $indent.Length))" -ForegroundColor Cyan
     Write-Host ""
 }
 
 function Write-Row([string]$label, [string]$msg, [string]$status = "ok") {
-    $icon = switch ($status) { "ok" { "+" } "warn" { "warn" } "skip" { "-" } "none" { "." } default { " " } }
+    $icon = switch ($status) { "ok" { "+" } "warn" { "warn" } "skip" { "-" } "none" { " " } default { " " } }
     $color = switch ($status) { "ok" { "Green" } "warn" { "Yellow" } default { "DarkGray" } }
     Write-Host ("  {0,-10}" -f $label) -ForegroundColor DarkGray -NoNewline
     Write-Host "$icon  " -ForegroundColor $color -NoNewline
     Write-Host $msg -ForegroundColor Gray
+}
+
+function Read-Row([string]$label, [string]$prompt) {
+    Write-Host ("  {0,-10}" -f $label) -ForegroundColor DarkGray -NoNewline
+    Write-Host "? " -ForegroundColor Cyan -NoNewline
+    $displayPrompt = if ($prompt) { $prompt } else { " " }
+    return (Read-Host $displayPrompt)
 }
 
 function Write-Fail([string]$msg) {
@@ -64,10 +78,11 @@ function Show-Advice {
     Write-Row "tip" "Usa 'cppx help' para ver los comandos disponibles" "none"
     Write-Host ""
 }
+
 # -- Guides ------------------------------------------------------------------
 
 function Show-Help {
-    Write-Header "cppx"
+    Write-Header "cppx" "help"
     $groups = $COMMANDS | Select-Object -ExpandProperty Group -Unique
     foreach ($g in $groups) {
         Write-Host "  $g" -ForegroundColor DarkGray
@@ -80,10 +95,7 @@ function Show-Help {
 }
 
 function Show-Architectures {
-    Write-Host ""
-    Write-Host "  arquitecturas disponibles" -ForegroundColor Cyan
-    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
-    Write-Host ""
+    Write-Header "cppx" "architectures"
     $ARCHITECTURES | ForEach-Object {
         Write-Host ("  {0,-12}" -f $_.Name) -ForegroundColor Cyan -NoNewline
         Write-Host $_.Desc -ForegroundColor DarkGray
@@ -114,17 +126,18 @@ function Test-Name([string]$n) {
         Write-Fail "el nombre no puede estar vacio"
         return $false
     }
-    if ($n -match '[/\\:*?"<>|]') {
-        Write-Fail "nombre invalido '$n'  -  caracteres no permitidos: / \ : * ? `" < > |"
+    if ($n -match '(^/|/$|//|[\\:*?"<>|\s])') {
+        Write-Fail "nombre invalido '$n'  -  caracteres no permitidos: / \ : * ? `" < > | <ESPACIO>"
         return $false
     }
     return $true
 }
 
 function Request-Name {
-    while (-not (Test-Name $name)) {
-        $script:name = Read-Host "nombre: "
-    }
+    if (Test-Name $name) { return }
+    do {
+        $script:name = Read-Row "nuevo nombre" " "
+    } while (-not (Test-Name $script:name))
 }
 
 function Test-PascalCase([string]$n) {
@@ -160,6 +173,13 @@ function Test-CMake {
         return $false
     }
     return $true
+}
+
+function Get-ProjectName {
+    $cmakeContent = Get-Content "CMakeLists.txt" -Raw
+    if ($cmakeContent -match 'project\(\s*(\w+)') { return $Matches[1] }
+    Write-Fail "no se pudo leer el nombre del proyecto desde CMakeLists.txt"
+    return $null
 }
 
 function Get-Template([string]$file, [hashtable]$replacements) {
@@ -268,41 +288,51 @@ function Build-TreeFromYaml($node, [string]$basePath, [string]$projectName) {
 }
 
 function Write-CppxMeta([string]$projectName, [string]$arch, [string]$repo = "") {
-    $lines = @("NAME=$projectName", "ARCH=$arch")
-    if ($repo) { $lines += "REPO=$repo" }
-    Set-Content ".cppx" ($lines -join "`n")
-    $summary = "NAME=$projectName, ARCH=$arch"
-    if ($repo) { $summary += ", REPO=$repo" }
-    Write-Row "meta" ".cppx  ($summary)"
+    $meta = [ordered]@{
+        name      = $projectName
+        arch      = $arch
+        repo      = $repo
+        createdAt = (Get-Date -Format "yyyy-MM-ddTHH:mm:ss")
+        compiler  = (Find-Compiler)
+        class     = @()
+        module    = @()
+    }
+    $meta | ConvertTo-Json | Set-Content "cppx.json"
+    Write-Row "meta" "cppx.json  (name=$projectName, arch=$arch)"
 }
 
 function Read-CppxMeta {
-    if (-not (Test-Path ".cppx")) { return @{} }
-    $meta = @{}
-    Get-Content ".cppx" | ForEach-Object {
-        if ($_ -match '^([A-Z]+)=(.*)$') {
-            $meta[$Matches[1]] = $Matches[2]
-        }
-    }
-    return $meta
+    if (-not (Test-Path "cppx.json")) { return $null }
+    return (Get-Content "cppx.json" -Raw | ConvertFrom-Json)
 }
 
 function Request-CppxMeta {
     $meta = Read-CppxMeta
-    if ($meta.Count -eq 0) {
-        Write-Fail ".cppx no encontrado"
+    if (-not $meta) {
+        Write-Fail "cppx.json no encontrado"
         return $null
     }
-    if (-not $meta["NAME"]) {
-        Write-Fail ".cppx no tiene campo NAME"
+    if (-not $meta.name) {
+        Write-Fail "cppx.json no tiene campo 'name'"
         return $null
     }
     return $meta
 }
 
+function Update-CppxMeta([hashtable]$fields) { # Escribe campos parciales sin pisar el resto
+    $meta = Read-CppxMeta
+    if (-not $meta) { return }
+    foreach ($key in $fields.Keys) {
+        $val = $fields[$key]
+        if ($val -is [array]) { $val = [array]$val }
+        $meta | Add-Member -MemberType NoteProperty -Name $key -Value $val -Force
+    }
+    $meta | ConvertTo-Json | Set-Content "cppx.json"
+}
+
 # -- Commands -----------------------------------------------------------------
 
-function New-Class {
+function New-CppFile([string]$type) {
     Request-Name
 
     $info = Split-SlashPair $name
@@ -316,22 +346,20 @@ function New-Class {
             $info = Split-SlashPair $script:name
         }
     }
-
-    $ns = $info.namespace
+    Write-Header "new $type" $class $(if ($info.namespace) { $info.namespace } else { "" })
     
-    Write-Header "new class  ->  $name"
-
-    $nsOpen = if ($ns) { "namespace $ns {" } else { "" }
-    $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
-    $dir = if ($ns) { ($name -replace "/$class$", "") } else { "" }
-
-    $includeDir = if ($dir) { "include/$dir" } else { "include" }
-    $srcDir = if ($dir) { "src/$dir" } else { "src" }
+    $isModule = $type -eq "modul"
+    
+    $ns        = if ($isModule) { ($name -replace "/", "::") } else { $info.namespace }
+    $ns        = if ($ns -eq $class) { "" } else { $ns }
+    $nsOpen    = if ($ns) { "namespace $ns {" }     else { "" }
+    $nsClose   = if ($ns) { "} // namespace $ns" }  else { "" }
+    $includeDir = if ($isModule) { "include/$name" } else { if ($info.head) { "include/$($info.head)" } else { "include" } }
+    $srcDir     = if ($isModule) { "src/$name" }     else { if ($info.head) { "src/$($info.head)" }     else { "src" } }
+    $includePath = if ($isModule) { "$name/$class" } else { if ($info.head) { "$($info.head)/$class" } else { $class } }
 
     $null = New-Item -ItemType Directory -Force -Path $includeDir
     $null = New-Item -ItemType Directory -Force -Path $srcDir
-
-    $includePath = if ($dir) { "$dir/$class" } else { $class }
 
     $repl = @{
         NAME            = $class
@@ -341,71 +369,32 @@ function New-Class {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    Set-Content "$includeDir/$class.h" (Get-Template "class.h.tpl" $repl)
-    Set-Content "$srcDir/$class.cpp" (Get-Template "class.cpp.tpl" $repl)
+    Set-Content "$includeDir/$class.h"   (Get-Template "$type.h.tpl"   $repl)
+    Set-Content "$srcDir/$class.cpp"     (Get-Template "$type.cpp.tpl" $repl)
 
     Write-Row "header" "$includeDir/$class.h"
     Write-Row "source" "$srcDir/$class.cpp"
     if ($ns) { Write-Row "namespace" $ns }
 
     $meta = Read-CppxMeta
-    if ($meta.ContainsKey("ARCH") -and $meta["ARCH"]) {
-        Write-Row "arch" "proyecto usa '$($meta["ARCH"])' - verifica que el subdirectorio sea correcto" "warn"
+    if ($meta -and $meta.arch -ne "small") {
+        Write-Row "arch" "proyecto usa '$($meta.arch)' - verifica que el subdirectorio sea correcto" "warn"
     }
+
+    $existing = @($meta.$type | Where-Object { $_ })
+    Update-CppxMeta @{ $type = [array]($existing + $class | Select-Object -Unique) }
 }
 
-function New-Module {
-    Request-Name
-
-    $info = Split-SlashPair $name
-    $class = $info.class
-
-    if (-not (Test-PascalCase $class)) {
-        $suggested = ConvertTo-PascalCase $class
-        if (Confirm "'$class' no sigue el formato PascalCase." "Transformar a '$suggested'?") {
-            $class = $suggested
-            $script:name = if ($info.head) { "$($info.head)/$class" } else { $class }
-            $info = Split-SlashPair $script:name
-        }
-    }
-
-    $ns = ($name -replace "/", "::")
-    
-    Write-Header "new module  ->  $name"
-
-    if ($ns -eq $class) { $ns = "" }
-    $nsOpen = if ($ns) { "namespace $ns {" }    else { "" }
-    $nsClose = if ($ns) { "} // namespace $ns" } else { "" }
-
-    $includeDir = "include/$name"
-    $srcDir = "src/$name"
-
-    $null = New-Item -ItemType Directory -Force -Path $includeDir
-    $null = New-Item -ItemType Directory -Force -Path $srcDir
-
-    $repl = @{
-        NAME            = $class
-        INCLUDE_PATH    = "$name/$class"
-        NAMESPACE       = $ns
-        NAMESPACE_OPEN  = $nsOpen
-        NAMESPACE_CLOSE = $nsClose
-    }
-
-    Set-Content "$includeDir/$class.h" (Get-Template "module.h.tpl" $repl)
-    Set-Content "$srcDir/$class.cpp" (Get-Template "module.cpp.tpl" $repl)
-
-    Write-Row "header" "$includeDir/$class.h"
-    Write-Row "source" "$srcDir/$class.cpp"
-    if ($ns) { Write-Row "namespace" $ns }
-}
+function New-Class  { New-CppFile "class" }
+function New-Module { New-CppFile "module" }
 
 function New-Project {
     Request-Name
-    Write-Header "new project  ->  $name"
-
+    
     $parsed = Split-SlashPair $name
     $projectName = $parsed.project
     $archName = $parsed.arch
+    Write-Header "new project" $projectName $archName
 
     if ($projectName -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
         Write-Fail "nombre de proyecto invalido: '$projectName'"
@@ -443,13 +432,12 @@ function New-Project {
 }
 
 function Build {
-    Write-Header "build"
-
     if (-not (Test-CMake)) { return $false }
     $meta = Request-CppxMeta
     if (-not $meta) { return $false }
-
-    Write-Row "project" $meta["NAME"]
+    Write-Header "build" $meta.name "debug"
+    
+    Write-Row "project" $meta.name
 
     $compiler = Find-Compiler
     if ($compiler -eq "UNKNOWN") {
@@ -475,12 +463,8 @@ function Build {
 function Run {
     if (-not (Build)) { return }
 
-    $cmakeContent = Get-Content "CMakeLists.txt" -Raw
-    if ($cmakeContent -notmatch 'project\((\w+)') {
-        Write-Fail "no se pudo leer el nombre del proyecto desde CMakeLists.txt"
-        return
-    }
-    $projectName = $Matches[1]
+    $projectName = Get-ProjectName
+    if (-not $projectName) { return }
 
     $searchPaths = @(
         "build/Debug/$projectName.exe",
@@ -520,15 +504,10 @@ function Dist {
     if (-not (Test-CMake)) { return }
     $meta = Request-CppxMeta
     if (-not $meta) { return }
-    Write-Header "dist"
+    Write-Header "dist" $meta.name "release"
 
-    $cmakeContent = Get-Content "CMakeLists.txt" -Raw
-    if ($cmakeContent -match 'project\(\s*(\w+)') {
-        $projectName = $Matches[1]
-    } else {
-        Write-Fail "no se pudo leer el nombre del proyecto en CMakeLists.txt"
-        return
-    }
+    $projectName = Get-ProjectName
+    if (-not $projectName) { return }
     
     Write-Row "mode" "release"
     Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
@@ -570,12 +549,10 @@ function Show-Credit {
     Write-Host ""
 }
 
-function Initialize-Git {
-    Write-Header "git init"
-
+function Initialize-Git {    
     $meta = Request-CppxMeta
     if (-not $meta) { return }
-    $projectName = $meta["NAME"]
+    Write-Header "git" $meta.name "init"
 
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Fail "git no esta instalado o no esta en el PATH"
@@ -590,13 +567,13 @@ function Initialize-Git {
     git init | Out-Null
     Write-Row "git" "repositorio inicializado" "ok"
 
-    $gitignoreContent = Get-Template ".gitignore.tpl" @{ NAME = $projectName }
+    $gitignoreContent = Get-Template ".gitignore.tpl" @{ NAME = $meta.name }
     if ($gitignoreContent) {
         Set-Content ".gitignore" $gitignoreContent
         Write-Row "file" ".gitignore" "ok"
     }
 
-    $readmeContent = Get-Template "README.md.tpl" @{ NAME = $projectName; ARCH = $meta["ARCH"] }
+    $readmeContent = Get-Template "README.md.tpl" @{ NAME = $meta.name; ARCH = $meta.arch }
     if ($readmeContent) {
         Set-Content "README.md" $readmeContent
         Write-Row "file" "README.md" "ok"
@@ -616,8 +593,7 @@ function Initialize-Git {
         }
     }
 
-    $arch = if ($meta["ARCH"]) { $meta["ARCH"] } else { "" }
-    Write-CppxMeta $projectName $arch $repoUrl
+    Update-CppxMeta @{ repo = $repoUrl }
 
     Write-Host ""
     Write-Row "done" "listo - usa 'git add .' y 'git commit' para tu primer commit" "ok"
