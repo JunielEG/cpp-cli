@@ -62,13 +62,20 @@ cppx
 | `cppx new project <name>/<arch>` | Creates a new C++ project with the specified architecture                                                    |
 | `cppx new class <name>`          | Adds a `.h`/`.cpp` pair to the current project                                                               |
 | `cppx new module <name>`         | Adds a module with its own subdirectory inside `src/` and `include/`                                         |
+| `cppx new interface <name>`      | Adds a `.h` as an abstract class / pure interface                                                            |
+| `cppx rename <old> <new>`        | AddRenames a `.h`/`.cpp` pair and updates all `#include` references                                          |
+| `cppx list`                      | Lists all classes and modules registered in the project                                                      |
 | `cppx build`                     | Configures and compiles the project using CMake                                                              |
+| `cppx build release`             | Compiles in Release mode without packaging                                                                   |
 | `cppx run`                       | Builds and runs the compiled executable                                                                      |
 | `cppx dist`                      | Builds in Release mode and packages the `.exe` + DLLs into `dist/<project>/`                                 |
+| `cppx clean`                     | Removes `build/` and `dist/` directories                                                                     |
 | `cppx git`                       | Creates an repository with a generic `.gitignore` and a simple `README.md`                                   |
+| `cppx info`                      | Shows project metadata from `cppx.json`                                                                      |
 | `cppx credit`                    | Shows the tool's name and the repo to get it [C++ Scaffolding Tool](https://github.com/JunielEG/cpp-cli.git) |
 
-> `new class` and `new module` will validate that the name follows PascalCase. If it doesn't, you'll be prompted to automatically convert it (e.g. `my_renderer` → `MyRenderer`).
+> `new class`, `new module`, and `new interface` will validate that the name follows PascalCase.
+> If it doesn't, you'll be prompted to automatically convert it (e.g. `my_renderer` → `MyRenderer`).
 
 ---
 
@@ -105,12 +112,12 @@ myapp/
 │   └── main.cpp
 ├── build/
 ├── CMakeLists.txt
-└── .cppx
+└── cppx.json
 ```
 
 - `main.cpp` includes a ready-to-compile entry point.
 - `CMakeLists.txt` is pre-configured with C++17, `file(GLOB_RECURSE)` over `src/`, and includes for both `include/` and `src/`.
-- `.cppx` stores project metadata (name and architecture). It is used by other commands to stay consistent with the project layout.
+- `cppx.json` stores project metadata. It is used by other commands to stay consistent with the project layout.
 
 > The project name must not contain any of the following characters: `/ \ : * ? " < > |`
 
@@ -156,6 +163,41 @@ dist/<project>/
 └── *.dll
 ```
 
+### `cppx new interface <name>`
+
+Adds a header-only abstract class to the project. No `.cpp` is generated — interfaces in C++ live entirely in `.h`.
+
+```bash
+cppx new interface audio/IAudioSource
+# generates: include/audio/IAudioSource.h
+```
+
+The generated file includes a virtual destructor as the only boilerplate. Add your pure virtual methods manually.
+
+### `cppx rename <old> <new>`
+
+Renames a `.h`/`.cpp` pair anywhere in the project and updates every `#include` that references the old name. Also updates `cppx.json`.
+
+```bash
+cppx rename Renderer VulkanRenderer
+```
+
+### `cppx clean`
+
+Deletes the `build/` and `dist/` directories. Useful before a clean rebuild.
+
+```bash
+cppx clean
+```
+
+### `cppx info`
+
+Displays project metadata stored in `cppx.json`: name, architecture, compiler, creation date, remote repo, and the list of registered classes and modules.
+
+### `cppx list`
+
+Lists all classes and modules registered in `cppx.json`.
+
 ---
 
 ## Quick start
@@ -165,7 +207,13 @@ cppx new project myapp/small
 
 cppx new class Game
 
+cppx new interface IRenderable
+
+cppx info
+
 cppx run
+
+cppx clean
 ```
 
 ---
