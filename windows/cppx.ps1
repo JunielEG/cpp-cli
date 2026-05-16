@@ -14,10 +14,16 @@ $COMMANDS = @(
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>/<arch>"; Desc = "crea proyecto con arquitectura (ej: mvc, small)" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <n>"; Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <n>"; Desc = "agrega modulo con su propio subdirectorio" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new interface <n>"; Desc = "agrega solo .h para clases abstractas / interfaces puras" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx rename <old> <new>"; Desc = "renombra par .h/.cpp y actualiza #includes en el proyecto" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx list"; Desc = "lista clases y modulos registrados en cppx.json" },
     [PSCustomObject]@{ Group = "build"; Cmd = "cppx build"; Desc = "configura y compila con CMake" },
     [PSCustomObject]@{ Group = "build"; Cmd = "cppx run"; Desc = "compila y ejecuta el binario resultante" },
     [PSCustomObject]@{ Group = "build"; Cmd = "cppx dist"; Desc = "release build + empaca .exe y DLLs en dist/<proyecto>/" },
+    [PSCustomObject]@{ Group = "build"; Cmd = "cppx build release"; Desc = "compila en modo release sin empaquetar" },
+    [PSCustomObject]@{ Group = "build"; Cmd = "cppx clean"; Desc = "elimina directorios build/ y dist/" },
     [PSCustomObject]@{ Group = "other"; Cmd = "cppx git"; Desc = "inicia repositorio git y genera .gitignore / README.md" },
+    [PSCustomObject]@{ Group = "other"; Cmd = "cppx info"; Desc = "muestra informacion del proyecto desde cppx.json" },
     [PSCustomObject]@{ Group = "other"; Cmd = "cppx credit"; Desc = "muestra la URL del repositorio de cppx" }
 )
 
@@ -501,27 +507,13 @@ Write-Host ''
 }
 
 function Dist {
-    if (-not (Test-CMake)) { return }
-    $meta = Request-CppxMeta
-    if (-not $meta) { return }
-    Write-Header "dist" $meta.name "release"
+    if (-not (Build-Release)) { return }
 
     $projectName = Get-ProjectName
     if (-not $projectName) { return }
-    
-    Write-Row "mode" "release"
-    Write-Host "  $('-' * 40)" -ForegroundColor DarkGray
-    Write-Host ""
-
-    cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
-    cmake --build build/release --config Release
 
     $exe = Get-ChildItem "build/release" -Filter "*.exe" -Recurse | Where-Object { $_.Name -notlike "CompilerId*" } | Select-Object -First 1
-
-    if (-not $exe) {
-        Write-Fail "no se encontro .exe tras compilar"
-        return
-    }
+    if (-not $exe) { Write-Fail "no se encontro .exe tras compilar"; return }
 
     $distDir = "dist/$projectName"
     $null = New-Item -ItemType Directory -Force -Path $distDir
@@ -600,22 +592,206 @@ function Initialize-Git {
     Write-Host ""
 }
 
+function Build-Release {
+    if (-not (Test-CMake)) { return $false }
+    $meta = Request-CppxMeta
+    if (-not $meta) { return $false }
+    Write-Header "build" $meta.name "release"
+
+    $compiler = Find-Compiler
+    if ($compiler -eq "UNKNOWN") { Write-Fail "no se encontro ningun compilador (cl g++ clang)"; return $false }
+    if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) { Write-Fail "cmake no esta instalado o no esta en el PATH"; return $false }
+
+    Write-Row "compiler" $compiler
+    Write-Host ""
+
+    cmake -S . -B build/release -DCMAKE_BUILD_TYPE=Release
+    cmake --build build/release --config Release
+
+    Write-Host ""
+    Write-Row "build" "release  ->  build/release/" "ok"
+    return $true
+}
+
+function Clear-Dist {
+    $meta = Request-CppxMeta
+    if (-not $meta) { return }
+    Write-Header "clean" $meta.name
+
+    foreach ($dir in @("build", "dist")) {
+        if (Test-Path $dir) {
+            Remove-Item $dir -Recurse -Force
+            Write-Row $dir "eliminado" "ok"
+        } else {
+            Write-Row $dir "no existe" "skip"
+        }
+    }
+}
+
+function Show-Info {
+    $meta = Request-CppxMeta
+    if (-not $meta) { return }
+    Write-Header "info" $meta.name
+
+    Write-Row "name"      $meta.name
+    Write-Row "arch"      $meta.arch
+    Write-Row "compiler"  $meta.compiler
+    Write-Row "created"   $meta.createdAt
+    if ($meta.repo) { Write-Row "repo" $meta.repo }
+
+    $classes = @($meta.classes | Where-Object { $_ })
+    $modules = @($meta.modules | Where-Object { $_ })
+
+    Write-Host ""
+    Write-Host "  classes" -ForegroundColor DarkGray
+    if ($classes.Count) { $classes | ForEach-Object { Write-Row "" $_ "none" } }
+    else                { Write-Row "" "(ninguna)" "skip" }
+
+    Write-Host ""
+    Write-Host "  modules" -ForegroundColor DarkGray
+    if ($modules.Count) { $modules | ForEach-Object { Write-Row "" $_ "none" } }
+    else                { Write-Row "" "(ninguno)" "skip" }
+
+    Write-Host ""
+}
+
+function Show-List {
+    $meta = Request-CppxMeta
+    if (-not $meta) { return }
+    Write-Header "list" $meta.name
+
+    $classes = @($meta.classes | Where-Object { $_ })
+    $modules = @($meta.modules | Where-Object { $_ })
+
+    Write-Host "  classes" -ForegroundColor DarkGray
+    if ($classes.Count) { $classes | ForEach-Object { Write-Row "class" $_ } }
+    else                { Write-Row "class" "(ninguna)" "skip" }
+
+    Write-Host ""
+    Write-Host "  modules" -ForegroundColor DarkGray
+    if ($modules.Count) { $modules | ForEach-Object { Write-Row "module" $_ } }
+    else                { Write-Row "module" "(ninguno)" "skip" }
+
+    Write-Host ""
+}
+
+function New-Interface {
+    Request-Name
+
+    $info = Split-SlashPair $name
+    $class = $info.class
+
+    if (-not (Test-PascalCase $class)) {
+        $suggested = ConvertTo-PascalCase $class
+        if (Confirm "'$class' no sigue el formato PascalCase." "Transformar a '$suggested'?") {
+            $class = $suggested
+            $script:name = if ($info.head) { "$($info.head)/$class" } else { $class }
+            $info = Split-SlashPair $script:name
+        }
+    }
+
+    Write-Header "new interface" $class $(if ($info.namespace) { $info.namespace } else { "" })
+
+    $ns         = $info.namespace
+    $nsOpen     = if ($ns) { "namespace $ns {" }    else { "" }
+    $nsClose    = if ($ns) { "} // namespace $ns" } else { "" }
+    $includeDir = if ($info.head) { "include/$($info.head)" } else { "include" }
+    $includePath = if ($info.head) { "$($info.head)/$class" } else { $class }
+
+    $null = New-Item -ItemType Directory -Force -Path $includeDir
+
+    $repl = @{
+        NAME            = $class
+        INCLUDE_PATH    = $includePath
+        NAMESPACE       = $ns
+        NAMESPACE_OPEN  = $nsOpen
+        NAMESPACE_CLOSE = $nsClose
+    }
+
+    Set-Content "$includeDir/$class.h" (Get-Template "interface.h.tpl" $repl)
+    Write-Row "header" "$includeDir/$class.h"
+    if ($ns) { Write-Row "namespace" $ns }
+
+    $existing = @($meta.classes | Where-Object { $_ })
+    Update-CppxMeta @{ classes = [array]($existing + $class | Select-Object -Unique) }
+}
+
+function Rename-CppFile {
+    if (-not $cmd2 -or -not $name) {
+        Write-Fail "uso: cppx rename <old> <new>"
+        return
+    }
+    $oldName = $cmd2
+    $newName = $name
+
+    Write-Header "rename" $oldName $newName
+
+    $oldFiles = @(
+        (Get-ChildItem -Recurse -Filter "$oldName.h"   | Select-Object -First 1),
+        (Get-ChildItem -Recurse -Filter "$oldName.cpp" | Select-Object -First 1)
+    ) | Where-Object { $_ }
+
+    if (-not $oldFiles.Count) {
+        Write-Fail "no se encontro '$oldName.h' ni '$oldName.cpp' en el proyecto"
+        return
+    }
+
+    foreach ($f in $oldFiles) {
+        $ext     = $f.Extension
+        $newPath = Join-Path $f.DirectoryName "$newName$ext"
+        Rename-Item $f.FullName $newPath
+        Write-Row "rename" "$($f.Name)  ->  $newName$ext" "ok"
+    }
+
+    $affected = 0
+    Get-ChildItem -Recurse -Include "*.h","*.cpp" | ForEach-Object {
+        $content = Get-Content $_.FullName -Raw
+        if ($content -match [regex]::Escape($oldName)) {
+            $updated = $content -replace [regex]::Escape($oldName), $newName
+            Set-Content $_.FullName $updated
+            Write-Row "updated" $_.Name "ok"
+            $affected++
+        }
+    }
+    if (-not $affected) { Write-Row "includes" "ninguno afectado" "skip" }
+
+    $meta = Read-CppxMeta
+    if ($meta) {
+        $classes = [array]($meta.classes | ForEach-Object { if ($_ -eq $oldName) { $newName } else { $_ } })
+        $modules = [array]($meta.modules | ForEach-Object { if ($_ -eq $oldName) { $newName } else { $_ } })
+        Update-CppxMeta @{ classes = $classes; modules = $modules }
+        Write-Row "meta" "cppx.json actualizado" "ok"
+    }
+}
+
+
+
 # -- Router -------------------------------------------------------------------
 
 switch ($cmd1) {
     "new" {
         switch ($cmd2) {
-            "class" { New-Class }
-            "module" { New-Module }
-            "project" { New-Project }
-            default { Show-Advice }
+            "class"     { New-Class }
+            "module"    { New-Module }
+            "interface" { New-Interface }
+            "project"   { New-Project }
+            default     { Show-Advice }
         }
     }
-    "build" { Build | Out-Null }
-    "run" { Run }
-    "dist" { Dist }
-    "git" { Initialize-Git }
+    "build" {
+        switch ($cmd2) {
+            "release" { Build-Release | Out-Null }
+            default   { Build | Out-Null }
+        }
+    }
+    "rename" { Rename-CppFile }
+    "list"   { Show-List }
+    "info"   { Show-Info }
+    "clean"  { Clear-Dist }
+    "run"    { Run }
+    "dist"   { Dist }
+    "git"    { Initialize-Git }
     "credit" { Show-Credit }
-    "help" { Show-Help }
-    default { Show-Advice }
+    "help"   { Show-Help }
+    default  { Show-Advice }
 }
