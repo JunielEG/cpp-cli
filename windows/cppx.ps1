@@ -12,10 +12,10 @@ $REPO_URL = "https://github.com/JunielEG/cpp-cli.git"
 $COMMANDS = @(
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>"; Desc = "crea proyecto con CMakeLists.txt" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new project <n>/<arch>"; Desc = "crea proyecto con arquitectura (ej: mvc, small)" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <n>"; Desc = "agrega par .h/.cpp (soporta namespaces: engine/Renderer)" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new class <n>"; Desc = "agrega par .hpp/.cpp (soporta namespaces: engine/Renderer)" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new module <n>"; Desc = "agrega modulo con su propio subdirectorio" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new interface <n>"; Desc = "agrega solo .h para clases abstractas / interfaces puras" },
-    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx rename <old> <new>"; Desc = "renombra par .h/.cpp y actualiza #includes en el proyecto" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx new interface <n>"; Desc = "agrega solo .hpp para clases abstractas / interfaces puras" },
+    [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx rename <old> <new>"; Desc = "renombra par .hpp/.cpp y actualiza #includes en el proyecto" },
     [PSCustomObject]@{ Group = "scaffold"; Cmd = "cppx list"; Desc = "lista clases y modulos registrados en cppx.json" },
     [PSCustomObject]@{ Group = "build"; Cmd = "cppx build"; Desc = "configura y compila con CMake" },
     [PSCustomObject]@{ Group = "build"; Cmd = "cppx run"; Desc = "compila y ejecuta el binario resultante" },
@@ -375,10 +375,10 @@ function New-CppFile([string]$type) {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    Set-Content "$includeDir/$class.h"   (Get-Template "$type.h.tpl"   $repl)
+    Set-Content "$includeDir/$class.hpp"   (Get-Template "$type.hpp.tpl"   $repl)
     Set-Content "$srcDir/$class.cpp"     (Get-Template "$type.cpp.tpl" $repl)
 
-    Write-Row "header" "$includeDir/$class.h"
+    Write-Row "header" "$includeDir/$class.hpp"
     Write-Row "source" "$srcDir/$class.cpp"
     if ($ns) { Write-Row "namespace" $ns }
 
@@ -708,8 +708,8 @@ function New-Interface {
         NAMESPACE_CLOSE = $nsClose
     }
 
-    Set-Content "$includeDir/$class.h" (Get-Template "interface.h.tpl" $repl)
-    Write-Row "header" "$includeDir/$class.h"
+    Set-Content "$includeDir/$class.hpp" (Get-Template "interface.hpp.tpl" $repl)
+    Write-Row "header" "$includeDir/$class.hpp"
     if ($ns) { Write-Row "namespace" $ns }
 
     $existing = @($meta.classes | Where-Object { $_ })
@@ -727,12 +727,12 @@ function Rename-CppFile {
     Write-Header "rename" $oldName $newName
 
     $oldFiles = @(
-        (Get-ChildItem -Recurse -Filter "$oldName.h"   | Select-Object -First 1),
+        (Get-ChildItem -Recurse -Filter "$oldName.hpp"   | Select-Object -First 1),
         (Get-ChildItem -Recurse -Filter "$oldName.cpp" | Select-Object -First 1)
     ) | Where-Object { $_ }
 
     if (-not $oldFiles.Count) {
-        Write-Fail "no se encontro '$oldName.h' ni '$oldName.cpp' en el proyecto"
+        Write-Fail "no se encontro '$oldName.hpp' ni '$oldName.cpp' en el proyecto"
         return
     }
 
@@ -744,7 +744,7 @@ function Rename-CppFile {
     }
 
     $affected = 0
-    Get-ChildItem -Recurse -Include "*.h","*.cpp" | ForEach-Object {
+    Get-ChildItem -Recurse -Include "*.hpp","*.cpp" | ForEach-Object {
         $content = Get-Content $_.FullName -Raw
         if ($content -match [regex]::Escape($oldName)) {
             $updated = $content -replace [regex]::Escape($oldName), $newName

@@ -17,7 +17,7 @@ Register-ArgumentCompleter -CommandName $toolCmd -ScriptBlock {
 
     $commands = @{
         ""    = @("new", "build", "run", "dist", "git", "credit", "help")
-        "new" = @("class", "module", "project")
+        "new" = @("class", "module", "project", "interface")
     }
 
     $completing = if ($tokens.Count -eq 1) { "" }

@@ -60,10 +60,10 @@ cppx
 | Command                          | Description                                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `cppx new project <name>/<arch>` | Creates a new C++ project with the specified architecture                                                    |
-| `cppx new class <name>`          | Adds a `.h`/`.cpp` pair to the current project                                                               |
+| `cppx new class <name>`          | Adds a `.hpp`/`.cpp` pair to the current project                                                               |
 | `cppx new module <name>`         | Adds a module with its own subdirectory inside `src/` and `include/`                                         |
-| `cppx new interface <name>`      | Adds a `.h` as an abstract class / pure interface                                                            |
-| `cppx rename <old> <new>`        | AddRenames a `.h`/`.cpp` pair and updates all `#include` references                                          |
+| `cppx new interface <name>`      | Adds a `.hpp` as an abstract class / pure interface                                                            |
+| `cppx rename <old> <new>`        | AddRenames a `.hpp`/`.cpp` pair and updates all `#include` references                                          |
 | `cppx list`                      | Lists all classes and modules registered in the project                                                      |
 | `cppx build`                     | Configures and compiles the project using CMake                                                              |
 | `cppx build release`             | Compiles in Release mode without packaging                                                                   |
@@ -123,10 +123,10 @@ myapp/
 
 ### `cppx new class <name>`
 
-Adds a `.h`/`.cpp` pair to an existing project. Must be run from the project root.
+Adds a `.hpp`/`.cpp` pair to an existing project. Must be run from the project root.
 
 ```
-include/<name>.h
+include/<name>.hpp
 src/<name>.cpp
 ```
 
@@ -134,7 +134,7 @@ Supports namespace paths using `/` as separator:
 
 ```bash
 cppx new class engine/Renderer
-# generates: include/engine/Renderer.h
+# generates: include/engine/Renderer.hpp
 #            src/engine/Renderer.cpp
 # namespace:  engine
 ```
@@ -147,7 +147,7 @@ Similar to `new class`, but creates a dedicated subdirectory for the module:
 
 ```bash
 cppx new module audio/Mixer
-# generates: include/audio/Mixer/Mixer.h
+# generates: include/audio/Mixer/Mixer.hpp
 #            src/audio/Mixer/Mixer.cpp
 ```
 
@@ -169,14 +169,14 @@ Adds a header-only abstract class to the project. No `.cpp` is generated — int
 
 ```bash
 cppx new interface audio/IAudioSource
-# generates: include/audio/IAudioSource.h
+# generates: include/audio/IAudioSource.hpp
 ```
 
 The generated file includes a virtual destructor as the only boilerplate. Add your pure virtual methods manually.
 
 ### `cppx rename <old> <new>`
 
-Renames a `.h`/`.cpp` pair anywhere in the project and updates every `#include` that references the old name. Also updates `cppx.json`.
+Renames a `.hpp`/`.cpp` pair anywhere in the project and updates every `#include` that references the old name. Also updates `cppx.json`.
 
 ```bash
 cppx rename Renderer VulkanRenderer

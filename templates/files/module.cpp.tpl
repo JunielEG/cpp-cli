@@ -1,4 +1,4 @@
-#include "{{INCLUDE_PATH}}.h"
+#include "{{INCLUDE_PATH}}.hpp"
 
 {{NAMESPACE_OPEN}}
 void init() {}
